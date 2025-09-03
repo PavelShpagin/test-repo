@@ -39,9 +39,9 @@
   const GHOST_SPAWN = 4;
   
   // Game speeds (tiles per second) - balanced for better gameplay with A* AI
-  const PACMAN_SPEED = 5.0;
-  const GHOST_SPEED = 4.0; // Faster ghosts to compensate for smarter AI
-  const FRIGHTENED_SPEED = 2.5;
+  const PACMAN_SPEED = 6.0; // Slightly faster for more responsive feel
+  const GHOST_SPEED = 4.5; // Faster ghosts to compensate for smarter AI
+  const FRIGHTENED_SPEED = 3.0; // Slightly faster frightened speed
   
   // Game timers - balanced for better gameplay
   const FRIGHTENED_TIME = 6000; // 6 seconds (shorter for more challenge)
@@ -90,7 +90,8 @@
     combo: 0, // For scoring combos
     lastGhostEaten: 0, // For bonus scoring
     screenShake: 0, // For screen shake effects
-    debugPaths: false // Toggle A* path visualization (set to true for debugging)
+    debugPaths: false, // Toggle A* path visualization (set to true for debugging)
+    soundEnabled: true // Sound toggle for mobile users
   };
 
   // Unified memory grid for entity management
@@ -1133,7 +1134,7 @@
   }
 
   function playTone(frequency, duration, volume = 0.1, type = 'square') {
-    if (!audioContext) return;
+    if (!audioContext || !game.soundEnabled) return;
     
     const oscillator = audioContext.createOscillator();
     const gainNode = audioContext.createGain();
@@ -1425,12 +1426,15 @@
 
         switch (tileType) {
           case WALL:
-            // Enhanced wall rendering with depth
-            ctx.fillStyle = '#001b8f';
+            // Enhanced wall rendering with depth and gradient
+            const wallGradient = ctx.createLinearGradient(pixelX, pixelY, pixelX + TILE, pixelY + TILE);
+            wallGradient.addColorStop(0, '#0040ff');
+            wallGradient.addColorStop(1, '#001b8f');
+            ctx.fillStyle = wallGradient;
             ctx.fillRect(pixelX, pixelY, TILE, TILE);
             
             // Top highlight
-            ctx.fillStyle = '#0040ff';
+            ctx.fillStyle = '#0050ff';
             ctx.fillRect(pixelX, pixelY, TILE, 2);
             
             // Left highlight
@@ -1592,6 +1596,11 @@
         game.debugPaths = !game.debugPaths;
         console.log('A* Path debugging:', game.debugPaths ? 'ON' : 'OFF');
         break;
+      case 'KeyM': // Toggle sound
+        game.soundEnabled = !game.soundEnabled;
+        console.log('Sound:', game.soundEnabled ? 'ON' : 'OFF');
+        if (game.soundEnabled) playTone(800, 0.1, 0.05);
+        break;
     }
     e.preventDefault();
   });
@@ -1615,6 +1624,18 @@
 
       const handlePress = (e) => {
         e.preventDefault();
+        
+        // Haptic feedback simulation for mobile
+        if (navigator.vibrate) {
+          navigator.vibrate(50);
+        }
+        
+        // Visual feedback
+        button.style.transform = 'scale(0.9)';
+        setTimeout(() => {
+          button.style.transform = '';
+        }, 100);
+        
         if (!game.gameStarted) {
           startGame();
         } else {
@@ -1662,12 +1683,20 @@
     }
   }, { passive: false });
 
-  // Enhanced game loop
+  // Enhanced game loop with performance monitoring
   let lastTime = 0;
+  let frameCount = 0;
+  let fpsCounter = 0;
   
   function gameLoop(currentTime) {
     const deltaTime = Math.min((currentTime - lastTime) / 1000, 0.016); // Cap at 60fps
     lastTime = currentTime;
+    
+    // FPS counter for performance monitoring (dev only)
+    frameCount++;
+    if (frameCount % 60 === 0) {
+      fpsCounter = Math.round(1 / deltaTime);
+    }
 
     if (game.running && !game.paused) {
       // Update invulnerability
