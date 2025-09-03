@@ -51,7 +51,7 @@ body {
 
 canvas#game {
   position: absolute;
-  top: 50%;
+  top: 45%;
   left: 50%;
   transform: translate(-50%, -50%);
   width: min(92vw, 570px);
@@ -231,6 +231,7 @@ canvas#game:hover {
   }
   
   canvas#game {
+    top: 40%;
     width: min(94vw, 420px);
     height: calc(min(94vw, 420px) * (21/19));
   }
@@ -262,6 +263,7 @@ canvas#game:hover {
   }
   
   canvas#game {
+    top: 38%;
     width: min(98vw, 390px);
     height: calc(min(98vw, 390px) * (21/19));
   }
@@ -293,6 +295,7 @@ canvas#game:hover {
   }
   
   canvas#game {
+    top: 35%;
     width: min(99vw, 350px);
     height: calc(min(99vw, 350px) * (21/19));
   }
