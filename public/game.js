@@ -1,6 +1,6 @@
 /*
-  Pac‑Man JS – Production Ready Game
-  Simple, reliable, bug-free implementation
+  Pac‑Man JS – Clean Positioned Game
+  Fixed positioning to prevent entities appearing half in walls
 */
 
 (function() {
@@ -29,7 +29,7 @@
   const POWER = 3;
   const EMPTY = 0;
   
-  // Game speeds
+  // Game speeds (tiles per second)
   const PACMAN_SPEED = 4;
   const GHOST_SPEED = 3;
   const FRIGHTENED_SPEED = 2;
@@ -168,7 +168,7 @@
     }
   }
 
-  // Simple Pac-Man class
+  // Enhanced Pac-Man class with clean positioning
   class PacMan {
     constructor() {
       this.reset();
@@ -185,6 +185,7 @@
       this.direction = { x: 0, y: 0 };
       this.nextDirection = { x: 0, y: 0 };
       this.speed = PACMAN_SPEED * TILE;
+      this.moving = false;
     }
 
     setDirection(dx, dy) {
@@ -198,66 +199,106 @@
       this.mouthAngle += this.animSpeed * deltaTime;
       if (this.mouthAngle > Math.PI * 2) this.mouthAngle = 0;
 
-      // Check if we can change direction
-      const nextTileX = this.tileX + this.nextDirection.x;
-      const nextTileY = this.tileY + this.nextDirection.y;
-      
-      if (this.nextDirection.x !== 0 || this.nextDirection.y !== 0) {
-        if (isValidPosition(nextTileX, nextTileY)) {
-          this.direction = { ...this.nextDirection };
-          this.nextDirection = { x: 0, y: 0 };
+      // Check if we're at tile center for direction changes
+      const centerX = this.tileX * TILE + TILE / 2;
+      const centerY = this.tileY * TILE + TILE / 2;
+      const atCenter = Math.abs(this.x - centerX) < 2 && Math.abs(this.y - centerY) < 2;
+
+      if (atCenter) {
+        // Snap to exact center for clean positioning
+        this.x = centerX;
+        this.y = centerY;
+
+        // Try to change direction if requested
+        if (this.nextDirection.x !== 0 || this.nextDirection.y !== 0) {
+          const nextTileX = this.tileX + this.nextDirection.x;
+          const nextTileY = this.tileY + this.nextDirection.y;
+          
+          if (isValidPosition(nextTileX, nextTileY)) {
+            this.direction = { ...this.nextDirection };
+            this.nextDirection = { x: 0, y: 0 };
+            this.moving = true;
+          }
+        }
+
+        // Check if current direction is still valid
+        if (this.direction.x !== 0 || this.direction.y !== 0) {
+          const currentNextX = this.tileX + this.direction.x;
+          const currentNextY = this.tileY + this.direction.y;
+          if (!isValidPosition(currentNextX, currentNextY)) {
+            this.direction = { x: 0, y: 0 };
+            this.moving = false;
+          }
         }
       }
 
-      // Move Pac-Man
-      const newX = this.x + this.direction.x * this.speed * deltaTime;
-      const newY = this.y + this.direction.y * this.speed * deltaTime;
-      
-      const newTileX = Math.floor(newX / TILE);
-      const newTileY = Math.floor(newY / TILE);
+      // Move Pac-Man smoothly
+      if (this.direction.x !== 0 || this.direction.y !== 0) {
+        this.moving = true;
+        const newX = this.x + this.direction.x * this.speed * deltaTime;
+        const newY = this.y + this.direction.y * this.speed * deltaTime;
 
-      // Check if new position is valid
-      if (isValidPosition(newTileX, newTileY)) {
-        this.x = newX;
-        this.y = newY;
-        this.tileX = newTileX;
-        this.tileY = newTileY;
+        // Calculate which tile we're moving into
+        const targetTileX = this.tileX + this.direction.x;
+        const targetTileY = this.tileY + this.direction.y;
+
+        // Only move if target tile is valid
+        if (isValidPosition(targetTileX, targetTileY)) {
+          this.x = newX;
+          this.y = newY;
+
+          // Update tile position when we cross tile boundaries
+          const newTileX = Math.round((this.x - TILE/2) / TILE);
+          const newTileY = Math.round((this.y - TILE/2) / TILE);
+          
+          if (newTileX !== this.tileX || newTileY !== this.tileY) {
+            this.tileX = newTileX;
+            this.tileY = newTileY;
+          }
+        } else {
+          // Stop at wall and align to center
+          this.x = centerX;
+          this.y = centerY;
+          this.direction = { x: 0, y: 0 };
+          this.moving = false;
+        }
       } else {
-        // Stop at wall
-        this.direction = { x: 0, y: 0 };
+        this.moving = false;
       }
 
-      // Tunnel wrap-around
-      if (this.x < 0) {
-        this.x = canvas.width;
+      // Tunnel wrap-around with clean positioning
+      if (this.x < -TILE/2) {
+        this.x = canvas.width + TILE/2;
         this.tileX = COLS - 1;
-      } else if (this.x > canvas.width) {
-        this.x = 0;
+      } else if (this.x > canvas.width + TILE/2) {
+        this.x = -TILE/2;
         this.tileX = 0;
       }
 
-      // Eat dots and power pellets
-      const currentTile = grid[this.tileY] && grid[this.tileY][this.tileX];
-      if (currentTile === DOT) {
-        grid[this.tileY][this.tileX] = EMPTY;
-        game.score += 10;
-        game.dotsRemaining--;
-        createParticles(this.x, this.y, '#FFFF00', 4);
-        playEatSound();
-        
-        if (game.dotsRemaining <= 0) {
-          nextLevel();
-        }
-      } else if (currentTile === POWER) {
-        grid[this.tileY][this.tileX] = EMPTY;
-        game.score += 50;
-        game.dotsRemaining--;
-        createParticles(this.x, this.y, '#FFB8FF', 8);
-        activateFrightenedMode();
-        playPowerSound();
-        
-        if (game.dotsRemaining <= 0) {
-          nextLevel();
+      // Eat dots and power pellets (only when at tile center)
+      if (atCenter) {
+        const currentTile = grid[this.tileY] && grid[this.tileY][this.tileX];
+        if (currentTile === DOT) {
+          grid[this.tileY][this.tileX] = EMPTY;
+          game.score += 10;
+          game.dotsRemaining--;
+          createParticles(this.x, this.y, '#FFFF00', 4);
+          playEatSound();
+          
+          if (game.dotsRemaining <= 0) {
+            nextLevel();
+          }
+        } else if (currentTile === POWER) {
+          grid[this.tileY][this.tileX] = EMPTY;
+          game.score += 50;
+          game.dotsRemaining--;
+          createParticles(this.x, this.y, '#FFB8FF', 8);
+          activateFrightenedMode();
+          playPowerSound();
+          
+          if (game.dotsRemaining <= 0) {
+            nextLevel();
+          }
         }
       }
     }
@@ -285,13 +326,17 @@
       ctx.fillStyle = '#FFFF00';
       ctx.beginPath();
       
-      // Mouth animation
-      const mouthSize = Math.abs(Math.sin(this.mouthAngle)) * 0.7 + 0.3;
-      const startAngle = mouthSize * 0.5;
-      const endAngle = Math.PI * 2 - mouthSize * 0.5;
+      // Mouth animation - only when moving
+      if (this.moving) {
+        const mouthSize = Math.abs(Math.sin(this.mouthAngle)) * 0.7 + 0.3;
+        const startAngle = mouthSize * 0.5;
+        const endAngle = Math.PI * 2 - mouthSize * 0.5;
+        ctx.arc(0, 0, radius, startAngle, endAngle);
+        ctx.lineTo(0, 0);
+      } else {
+        ctx.arc(0, 0, radius, 0, Math.PI * 2);
+      }
       
-      ctx.arc(0, 0, radius, startAngle, endAngle);
-      ctx.lineTo(0, 0);
       ctx.closePath();
       ctx.fill();
 
@@ -299,7 +344,7 @@
     }
   }
 
-  // Simple Ghost class
+  // Enhanced Ghost class with clean positioning
   class Ghost {
     constructor(name, color, startX, startY) {
       this.name = name;
@@ -339,6 +384,7 @@
       this.frightenedTimer = 0;
       this.mode = 'chase';
       this.spawnTimer = 1000;
+      this.moving = false;
     }
 
     update(deltaTime, pacman) {
@@ -360,7 +406,64 @@
         }
       }
 
-      // Simple AI
+      // Check if we're at tile center for direction changes
+      const centerX = this.tileX * TILE + TILE / 2;
+      const centerY = this.tileY * TILE + TILE / 2;
+      const atCenter = Math.abs(this.x - centerX) < 2 && Math.abs(this.y - centerY) < 2;
+
+      if (atCenter || (this.direction.x === 0 && this.direction.y === 0)) {
+        // Snap to exact center for clean positioning
+        this.x = centerX;
+        this.y = centerY;
+        
+        this.chooseDirection(pacman);
+      }
+
+      // Move ghost smoothly
+      if (this.direction.x !== 0 || this.direction.y !== 0) {
+        this.moving = true;
+        const newX = this.x + this.direction.x * this.speed * deltaTime;
+        const newY = this.y + this.direction.y * this.speed * deltaTime;
+
+        // Calculate target tile
+        const targetTileX = this.tileX + this.direction.x;
+        const targetTileY = this.tileY + this.direction.y;
+
+        // Only move if target tile is valid
+        if (isValidPosition(targetTileX, targetTileY)) {
+          this.x = newX;
+          this.y = newY;
+
+          // Update tile position when crossing boundaries
+          const newTileX = Math.round((this.x - TILE/2) / TILE);
+          const newTileY = Math.round((this.y - TILE/2) / TILE);
+          
+          if (newTileX !== this.tileX || newTileY !== this.tileY) {
+            this.tileX = newTileX;
+            this.tileY = newTileY;
+          }
+        } else {
+          // Stop at wall and align to center
+          this.x = centerX;
+          this.y = centerY;
+          this.direction = { x: 0, y: 0 };
+          this.moving = false;
+        }
+      } else {
+        this.moving = false;
+      }
+
+      // Tunnel wrap-around with clean positioning
+      if (this.x < -TILE/2) {
+        this.x = canvas.width + TILE/2;
+        this.tileX = COLS - 1;
+      } else if (this.x > canvas.width + TILE/2) {
+        this.x = -TILE/2;
+        this.tileX = 0;
+      }
+    }
+
+    chooseDirection(pacman) {
       const directions = [
         { x: 0, y: -1 }, // up
         { x: 1, y: 0 },  // right
@@ -385,56 +488,84 @@
         });
         if (reverseDirs.length > 0) {
           this.direction = reverseDirs[0];
+          this.lastDirection = { ...this.direction };
         }
+        return;
+      }
+
+      // Choose direction based on mode
+      let targetDir;
+      if (this.frightened) {
+        // Run away from Pac-Man
+        const distances = validDirs.map(dir => {
+          const newX = this.tileX + dir.x;
+          const newY = this.tileY + dir.y;
+          return getDistance({ x: newX, y: newY }, { x: pacman.tileX, y: pacman.tileY });
+        });
+        const maxDistIndex = distances.indexOf(Math.max(...distances));
+        targetDir = validDirs[maxDistIndex];
       } else {
-        // Choose direction based on mode
-        let targetDir;
-        if (this.frightened) {
-          // Run away from Pac-Man
-          const distances = validDirs.map(dir => {
-            const newX = this.tileX + dir.x;
-            const newY = this.tileY + dir.y;
-            return getDistance({ x: newX, y: newY }, { x: pacman.tileX, y: pacman.tileY });
-          });
-          const maxDistIndex = distances.indexOf(Math.max(...distances));
-          targetDir = validDirs[maxDistIndex];
-        } else {
-          // Chase Pac-Man
-          const distances = validDirs.map(dir => {
-            const newX = this.tileX + dir.x;
-            const newY = this.tileY + dir.y;
-            return getDistance({ x: newX, y: newY }, { x: pacman.tileX, y: pacman.tileY });
-          });
-          const minDistIndex = distances.indexOf(Math.min(...distances));
-          targetDir = validDirs[minDistIndex];
+        // Enhanced AI based on ghost personality
+        switch (this.name) {
+          case 'blinky': // Aggressive chaser
+            const distances = validDirs.map(dir => {
+              const newX = this.tileX + dir.x;
+              const newY = this.tileY + dir.y;
+              return getDistance({ x: newX, y: newY }, { x: pacman.tileX, y: pacman.tileY });
+            });
+            const minDistIndex = distances.indexOf(Math.min(...distances));
+            targetDir = validDirs[minDistIndex];
+            break;
+            
+          case 'pinky': // Ambusher
+            const ambushX = pacman.tileX + pacman.direction.x * 4;
+            const ambushY = pacman.tileY + pacman.direction.y * 4;
+            const ambushDistances = validDirs.map(dir => {
+              const newX = this.tileX + dir.x;
+              const newY = this.tileY + dir.y;
+              return getDistance({ x: newX, y: newY }, { x: ambushX, y: ambushY });
+            });
+            const minAmbushIndex = ambushDistances.indexOf(Math.min(...ambushDistances));
+            targetDir = validDirs[minAmbushIndex];
+            break;
+            
+          case 'inky': // Patrol with chase
+            if (Math.random() < 0.6) {
+              const chaseDistances = validDirs.map(dir => {
+                const newX = this.tileX + dir.x;
+                const newY = this.tileY + dir.y;
+                return getDistance({ x: newX, y: newY }, { x: pacman.tileX, y: pacman.tileY });
+              });
+              const minChaseIndex = chaseDistances.indexOf(Math.min(...chaseDistances));
+              targetDir = validDirs[minChaseIndex];
+            } else {
+              targetDir = validDirs[Math.floor(Math.random() * validDirs.length)];
+            }
+            break;
+            
+          case 'clyde': // Keep distance
+            const clydeDistance = getDistance(this, pacman);
+            if (clydeDistance < TILE * 6) {
+              targetDir = validDirs[Math.floor(Math.random() * validDirs.length)];
+            } else {
+              const chaseDistances = validDirs.map(dir => {
+                const newX = this.tileX + dir.x;
+                const newY = this.tileY + dir.y;
+                return getDistance({ x: newX, y: newY }, { x: pacman.tileX, y: pacman.tileY });
+              });
+              const minChaseIndex = chaseDistances.indexOf(Math.min(...chaseDistances));
+              targetDir = validDirs[minChaseIndex];
+            }
+            break;
+            
+          default:
+            targetDir = validDirs[0];
         }
+      }
+
+      if (targetDir) {
         this.direction = targetDir;
-      }
-
-      this.lastDirection = { ...this.direction };
-
-      // Move ghost
-      const newX = this.x + this.direction.x * this.speed * deltaTime;
-      const newY = this.y + this.direction.y * this.speed * deltaTime;
-      
-      const newTileX = Math.floor(newX / TILE);
-      const newTileY = Math.floor(newY / TILE);
-
-      // Only move if position is valid
-      if (isValidPosition(newTileX, newTileY)) {
-        this.x = newX;
-        this.y = newY;
-        this.tileX = newTileX;
-        this.tileY = newTileY;
-      }
-
-      // Tunnel wrap-around
-      if (this.x < 0) {
-        this.x = canvas.width;
-        this.tileX = COLS - 1;
-      } else if (this.x > canvas.width) {
-        this.x = 0;
-        this.tileX = 0;
+        this.lastDirection = { ...targetDir };
       }
     }
 
@@ -479,11 +610,17 @@
       ctx.arc(radius * 0.3, -radius * 0.2, radius * 0.15, 0, Math.PI * 2);
       ctx.fill();
 
-      // Pupils
+      // Pupils that follow movement direction
       ctx.fillStyle = '#000000';
+      const pupilOffset = 2;
+      const leftPupilX = -radius * 0.3 + this.direction.x * pupilOffset;
+      const leftPupilY = -radius * 0.2 + this.direction.y * pupilOffset;
+      const rightPupilX = radius * 0.3 + this.direction.x * pupilOffset;
+      const rightPupilY = -radius * 0.2 + this.direction.y * pupilOffset;
+      
       ctx.beginPath();
-      ctx.arc(-radius * 0.3, -radius * 0.2, radius * 0.08, 0, Math.PI * 2);
-      ctx.arc(radius * 0.3, -radius * 0.2, radius * 0.08, 0, Math.PI * 2);
+      ctx.arc(leftPupilX, leftPupilY, radius * 0.08, 0, Math.PI * 2);
+      ctx.arc(rightPupilX, rightPupilY, radius * 0.08, 0, Math.PI * 2);
       ctx.fill();
 
       ctx.restore();
@@ -963,5 +1100,5 @@
   canvas.focus();
   canvas.addEventListener('contextmenu', e => e.preventDefault());
   
-  console.log('Pac-Man Production Ready! 🎮');
+  console.log('Clean Positioned Pac-Man Ready! 🎮');
 })();
