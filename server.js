@@ -4,7 +4,7 @@ const path = require('path');
 const { spawn } = require('child_process');
 
 const PORT = process.env.PORT ? Number(process.env.PORT) : 8080;
-const PUBLIC_DIR = path.join(__dirname, 'public');
+const PUBLIC_DIR = __dirname;
 
 function sendFile(res, filePath, contentType) {
   fs.readFile(filePath, (err, data) => {

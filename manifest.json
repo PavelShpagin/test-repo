@@ -1,30 +1,21 @@
 {
-  "name": "PAC-MAN Mobile",
-  "short_name": "PAC-MAN",
-  "description": "Classic PAC-MAN game optimized for mobile devices",
+  "name": "Pacman",
+  "short_name": "Pacman",
+  "description": "Simple, responsive Pacman game",
   "start_url": "/",
   "display": "fullscreen",
   "orientation": "portrait",
-  "background_color": "#000000",
-  "theme_color": "#FFD700",
+  "theme_color": "#000000",
+  "background_color": "#667eea",
   "icons": [
     {
-      "src": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxOTIiIGhlaWdodD0iMTkyIiB2aWV3Qm94PSIwIDAgMTkyIDE5MiI+CiAgPHJlY3Qgd2lkdGg9IjE5MiIgaGVpZ2h0PSIxOTIiIGZpbGw9IiMwMDAwMDAiLz4KICA8Y2lyY2xlIGN4PSI5NiIgY3k9Ijk2IiByPSI2MCIgZmlsbD0iI0ZGRDcwMCIvPgogIDxwYXRoIGQ9Ik0gOTYsOTYgTCAxNTYsOTYgQSA2MCw2MCAwIDAsMSAxMjYsMTQ2IEwgOTYsOTYiIGZpbGw9IiMwMDAwMDAiLz4KICA8Y2lyY2xlIGN4PSI5NiIgY3k9IjcwIiByPSI4IiBmaWxsPSIjMDAwMDAwIi8+Cjwvc3ZnPg==",
+      "src": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'%3E%3Ccircle cx='96' cy='96' r='88' fill='%23ffeb3b'/%3E%3Cpath d='M96 96 L184 96 A88 88 0 0 1 96 184 Z' fill='%23000'/%3E%3C/svg%3E",
       "sizes": "192x192",
-      "type": "image/svg+xml"
-    },
-    {
-      "src": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI1MTIiIGhlaWdodD0iNTEyIiB2aWV3Qm94PSIwIDAgNTEyIDUxMiI+CiAgPHJlY3Qgd2lkdGg9IjUxMiIgaGVpZ2h0PSI1MTIiIGZpbGw9IiMwMDAwMDAiLz4KICA8Y2lyY2xlIGN4PSIyNTYiIGN5PSIyNTYiIHI9IjE2MCIgZmlsbD0iI0ZGRDcwMCIvPgogIDxwYXRoIGQ9Ik0gMjU2LDI1NiBMIDQxNiwyNTYgQSAxNjAsMTYwIDAgMCwxIDMzNiwzODYgTCAyNTYsMjU2IiBmaWxsPSIjMDAwMDAwIi8+CiAgPGNpcmNsZSBjeD0iMjU2IiBjeT0iMTg2IiByPSIyMCIgZmlsbD0iIzAwMDAwMCIvPgo8L3N2Zz4=",
-      "sizes": "512x512",
-      "type": "image/svg+xml"
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
     }
   ],
-  "categories": ["games", "arcade"],
-  "screenshots": [
-    {
-      "src": "/screenshot1.png",
-      "sizes": "1080x2400",
-      "type": "image/png"
-    }
-  ]
+  "categories": ["games", "entertainment"],
+  "screenshots": [],
+  "prefer_related_applications": false
 }
