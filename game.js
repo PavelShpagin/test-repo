@@ -12,6 +12,7 @@ let lives = 3;
 let level = 1;
 let gameRunning = false;
 let animationId;
+let isMobile = false;
 
 // Directions
 const DIRECTIONS = {
@@ -21,7 +22,7 @@ const DIRECTIONS = {
     RIGHT: { x: 1, y: 0 }
 };
 
-// Classic maze layout (0 = corridor with pellet, 1 = wall, 2 = pacman start, 3+ = ghost starts, 9 = empty corridor)
+// Classic maze layout
 const MAZE = [
     [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
     [1,0,0,0,0,0,0,0,0,0,0,0,0,1,1,0,0,0,0,0,0,0,0,0,0,0,0,1],
@@ -67,11 +68,16 @@ function init() {
     canvas = document.getElementById('game-canvas');
     ctx = canvas.getContext('2d');
     
+    // Set canvas size
     canvas.width = MAZE[0].length * CELL_SIZE;
     canvas.height = MAZE.length * CELL_SIZE;
     
     // Deep copy maze
     maze = MAZE.map(row => [...row]);
+    
+    // Check if mobile
+    isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || 
+               window.matchMedia("(pointer: coarse)").matches;
     
     // Initialize game entities
     initializeEntities();
@@ -79,7 +85,7 @@ function init() {
     // Update UI
     updateUI();
     
-    // Set up keyboard controls
+    // Set up controls
     setupControls();
     
     // Draw initial frame to prevent flicker
@@ -107,9 +113,9 @@ function initializeEntities() {
                     x: x * CELL_SIZE + CELL_SIZE / 2,
                     y: y * CELL_SIZE + CELL_SIZE / 2,
                     color: getGhostColor(cell - 3),
-                    direction: directions[Math.floor(Math.random() * directions.length)], // Random initial direction
+                    direction: directions[Math.floor(Math.random() * directions.length)],
                     previousDirection: null,
-                    moveCounter: Math.floor(Math.random() * 30) // Randomize initial move timing
+                    moveCounter: Math.floor(Math.random() * 30)
                 });
                 maze[y][x] = 9; // Clear the cell
             }
@@ -123,6 +129,7 @@ function getGhostColor(index) {
 }
 
 function setupControls() {
+    // Keyboard controls
     document.addEventListener('keydown', (e) => {
         if (!gameRunning) return;
         
@@ -142,6 +149,76 @@ function setupControls() {
         }
         e.preventDefault();
     });
+    
+    // Mobile touch controls
+    const mobileControls = document.querySelectorAll('.control-btn');
+    mobileControls.forEach(btn => {
+        // Touch events
+        btn.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            if (!gameRunning) return;
+            handleDirectionInput(btn.dataset.direction);
+        });
+        
+        // Mouse events for testing on desktop
+        btn.addEventListener('click', (e) => {
+            e.preventDefault();
+            if (!gameRunning) return;
+            handleDirectionInput(btn.dataset.direction);
+        });
+    });
+    
+    // Swipe controls
+    let touchStartX = 0;
+    let touchStartY = 0;
+    
+    canvas.addEventListener('touchstart', (e) => {
+        touchStartX = e.touches[0].clientX;
+        touchStartY = e.touches[0].clientY;
+    });
+    
+    canvas.addEventListener('touchend', (e) => {
+        if (!gameRunning) return;
+        
+        const touchEndX = e.changedTouches[0].clientX;
+        const touchEndY = e.changedTouches[0].clientY;
+        
+        const dx = touchEndX - touchStartX;
+        const dy = touchEndY - touchStartY;
+        
+        if (Math.abs(dx) > Math.abs(dy)) {
+            // Horizontal swipe
+            if (dx > 30) {
+                pacman.nextDirection = DIRECTIONS.RIGHT;
+            } else if (dx < -30) {
+                pacman.nextDirection = DIRECTIONS.LEFT;
+            }
+        } else {
+            // Vertical swipe
+            if (dy > 30) {
+                pacman.nextDirection = DIRECTIONS.DOWN;
+            } else if (dy < -30) {
+                pacman.nextDirection = DIRECTIONS.UP;
+            }
+        }
+    });
+}
+
+function handleDirectionInput(direction) {
+    switch(direction) {
+        case 'up':
+            pacman.nextDirection = DIRECTIONS.UP;
+            break;
+        case 'down':
+            pacman.nextDirection = DIRECTIONS.DOWN;
+            break;
+        case 'left':
+            pacman.nextDirection = DIRECTIONS.LEFT;
+            break;
+        case 'right':
+            pacman.nextDirection = DIRECTIONS.RIGHT;
+            break;
+    }
 }
 
 function canMove(x, y, direction, speed = PACMAN_SPEED) {
@@ -215,8 +292,7 @@ function updateGhosts() {
         ghost.moveCounter++;
         
         // Change direction randomly at intervals
-        // Use different intervals for each ghost to make movement more varied
-        const changeInterval = 25 + (ghosts.indexOf(ghost) * 5); // Each ghost has slightly different timing
+        const changeInterval = 25 + (ghosts.indexOf(ghost) * 5);
         if (ghost.moveCounter % changeInterval === 0) {
             const possibleDirections = Object.values(DIRECTIONS);
             
@@ -229,7 +305,6 @@ function updateGhosts() {
                     ghost.previousDirection = ghost.direction;
                     ghost.direction = filtered[Math.floor(Math.random() * filtered.length)];
                 } else {
-                    // If only reversal is available, use it
                     ghost.previousDirection = ghost.direction;
                     ghost.direction = possibleDirections[Math.floor(Math.random() * possibleDirections.length)];
                 }
@@ -345,7 +420,7 @@ function draw() {
     // Draw ghosts with slight transparency for better overlap visibility
     for (let ghost of ghosts) {
         ctx.save();
-        ctx.globalAlpha = 0.9; // Slight transparency so overlapping ghosts are visible
+        ctx.globalAlpha = 0.9;
         ctx.fillStyle = ghost.color;
         
         // Ghost body
@@ -382,7 +457,7 @@ function draw() {
         ctx.arc(ghost.x + 5, ghost.y - 2, 1.5, 0, Math.PI * 2);
         ctx.fill();
         
-        ctx.restore(); // Restore the global alpha
+        ctx.restore();
     }
 }
 
@@ -432,3 +507,10 @@ function resetGame() {
 
 // Initialize game when page loads
 window.addEventListener('load', init);
+
+// Prevent zoom on double tap for mobile
+document.addEventListener('touchstart', function(e) {
+    if (e.touches.length > 1) {
+        e.preventDefault();
+    }
+});

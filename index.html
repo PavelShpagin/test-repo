@@ -2,20 +2,24 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Classic Pacman</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Pacman - Mobile & Desktop</title>
     <link rel="stylesheet" href="style.css">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
 </head>
 <body>
     <div class="game-container">
         <div class="header">
             <div class="score-board">
                 <div class="score">SCORE: <span id="score">0</span></div>
-                <div class="high-score">HIGH SCORE: <span id="high-score">0</span></div>
+                <div class="high-score">HIGH: <span id="high-score">0</span></div>
             </div>
         </div>
         
-        <canvas id="game-canvas"></canvas>
+        <div class="game-wrapper">
+            <canvas id="game-canvas"></canvas>
+        </div>
         
         <div class="game-info">
             <div class="lives">
@@ -25,20 +29,36 @@
             <div class="level">LEVEL: <span id="level">1</span></div>
         </div>
         
+        <!-- Mobile Controls -->
+        <div class="mobile-controls" id="mobile-controls">
+            <div class="control-pad">
+                <button class="control-btn up" data-direction="up">▲</button>
+                <div class="control-row">
+                    <button class="control-btn left" data-direction="left">◄</button>
+                    <button class="control-btn right" data-direction="right">►</button>
+                </div>
+                <button class="control-btn down" data-direction="down">▼</button>
+            </div>
+        </div>
+        
+        <!-- Game Overlays -->
         <div id="game-over" class="overlay hidden">
             <div class="overlay-content">
                 <h2>GAME OVER</h2>
                 <p>Final Score: <span id="final-score">0</span></p>
-                <button onclick="resetGame()">PLAY AGAIN</button>
+                <button class="game-button" onclick="resetGame()">PLAY AGAIN</button>
             </div>
         </div>
         
         <div id="start-screen" class="overlay">
             <div class="overlay-content">
                 <h1>PACMAN</h1>
-                <p>Use arrow keys to move</p>
+                <p class="instructions">
+                    <span class="desktop-only">Use arrow keys to move</span>
+                    <span class="mobile-only">Use the control pad to move</span>
+                </p>
                 <p>Avoid the ghosts!</p>
-                <button onclick="startGame()">START GAME</button>
+                <button class="game-button" onclick="startGame()">START GAME</button>
             </div>
         </div>
     </div>

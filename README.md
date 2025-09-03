@@ -1,29 +1,37 @@
-# Classic Pacman Game
+# Pacman - Mobile & Desktop
 
-A browser-based Pacman game with classic arcade gameplay.
-
-## How to Play
-
-1. Open `index.html` in any web browser
-2. Click "START GAME" to begin
-3. Use arrow keys to control Pacman
-4. Collect all pellets while avoiding ghosts
-5. You have 3 lives
+A clean, responsive Pacman game that works perfectly on both mobile and desktop devices.
 
 ## Features
 
-- Classic Pacman gameplay
-- 4 colorful ghosts that move randomly
-- Score tracking with persistent high score
-- Progressive difficulty
-- Smooth 60 FPS performance
+- **Responsive Design**: Automatically adapts to any screen size
+- **Mobile Controls**: Touch-friendly control pad and swipe gestures
+- **Desktop Controls**: Classic arrow key controls
+- **Ghost AI**: Ghosts pass through walls with random movement
+- **Score System**: Persistent high score using localStorage
+- **Progressive Difficulty**: Speed increases with each level
+- **Clean Graphics**: Pixel-perfect rendering with smooth animations
 
-## Files
+## How to Play
 
-- `index.html` - Main game page
-- `game.js` - Game logic
-- `style.css` - Styling
+### Desktop
+- Use arrow keys to control Pacman
+- Avoid the ghosts
+- Collect all pellets to advance
 
-## Play Online
+### Mobile
+- Use the on-screen control pad
+- Or swipe on the game canvas
+- Touch-optimized for all devices
 
-Simply open index.html in your browser or host on GitHub Pages.
+## Technical Details
+
+- Pure JavaScript (no dependencies)
+- HTML5 Canvas
+- Responsive CSS
+- Mobile-first design
+- 60 FPS performance
+
+## Live Demo
+
+Open `index.html` in any modern browser or deploy to GitHub Pages for instant play.
