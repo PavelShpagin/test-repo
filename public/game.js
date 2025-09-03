@@ -113,8 +113,8 @@
     }
   }
 
-  // Teleport tunnel columns (left/right wrap). We'll use row 14 (center) as the tunnel.
-  const TUNNEL_Y = 14;
+  // Teleport tunnel columns (left/right wrap). We'll use row 17 (center) as the tunnel.
+  const TUNNEL_Y = 17;
 
   function isInside(tx, ty) { return tx >= 0 && ty >= 0 && tx < COLS && ty < ROWS; }
   function isPassable(tx, ty, forGhost=false) {
@@ -290,7 +290,7 @@
     setHouseDelay(seconds) { this.leaveHouseTimer = seconds; }
     isInHouse() {
       const t = this.tile;
-      return t.y >= 12 && t.y <= 16 && t.x >= 11 && t.x <= 16; // around the center box
+      return t.y >= 15 && t.y <= 19 && t.x >= 11 && t.x <= 16; // around the center box
     }
     
     shouldLeaveHouse() {
@@ -322,10 +322,10 @@
       if (this.eyeOnly) {
         this.speed = TILE * 9;
         // Target the house center to respawn
-        target = { x: 14, y: 14 };
+        target = { x: 14, y: 17 };
         // If reached house center, respawn
         const t = this.tile;
-        if (t.x === 14 && t.y === 14 && this.atCenterOfTile()) {
+        if (t.x === 14 && t.y === 17 && this.atCenterOfTile()) {
           this.eyeOnly = false;
           this.frightened = false;
           this.speed = GHOST_SPEED;
@@ -335,7 +335,7 @@
         }
       } else if (this.shouldLeaveHouse()) {
         // Force ghosts to leave the house by targeting the exit
-        target = { x: 14, y: 11 }; // Exit point above the house
+        target = { x: 14, y: 12 }; // Exit point above the house
       } else if (this.frightened) {
         // Random movement when frightened, but avoid walls
         let attempts = 0;
@@ -605,12 +605,12 @@
   }
 
   // Game setup
-  const pacman = new Pacman(14, 26); // Start in bottom corridor
+  const pacman = new Pacman(14, 29); // Start in bottom corridor
   const ghosts = [
-    new Ghost('blinky', '#ff0000', 14, 14),  // Red - starts outside, no delay
-    new Ghost('pinky',  '#ffb8ff', 13, 14),  // Pink - in house
-    new Ghost('inky',   '#00ffff', 15, 14),  // Cyan - in house  
-    new Ghost('clyde',  '#ffb852', 14, 15),  // Orange - in house
+    new Ghost('blinky', '#ff0000', 14, 17),  // Red - starts outside, no delay
+    new Ghost('pinky',  '#ffb8ff', 13, 17),  // Pink - in house
+    new Ghost('inky',   '#00ffff', 15, 17),  // Cyan - in house  
+    new Ghost('clyde',  '#ffb852', 14, 18),  // Orange - in house
   ];
   // Blinky starts immediately, others have delays
   ghosts[0].setHouseDelay(0);    // Blinky starts moving right away
@@ -640,8 +640,8 @@
   }
 
   function resetPositions() {
-    const p = tileCenter(14, 26); pacman.x = p.x; pacman.y = p.y; pacman.dir = {x:0,y:0}; pacman.nextDir = {x:0,y:0};
-    const gpos = [ [14,14],[13,14],[15,14],[14,15] ];
+    const p = tileCenter(14, 29); pacman.x = p.x; pacman.y = p.y; pacman.dir = {x:0,y:0}; pacman.nextDir = {x:0,y:0};
+    const gpos = [ [14,17],[13,17],[15,17],[14,18] ];
     ghosts.forEach((g,i)=>{
       const c = tileCenter(gpos[i][0], gpos[i][1]); 
       g.x=c.x; g.y=c.y; 
