@@ -143,30 +143,47 @@
     move(dt, forGhost=false) {
       const { x: tx, y: ty } = this.tile;
       const center = tileCenter(tx, ty);
+      
       // Snap to tile center when crossing center
       if (this.dir.x !== 0 && Math.sign(center.x - this.x) !== Math.sign(this.dir.x)) this.x = center.x;
       if (this.dir.y !== 0 && Math.sign(center.y - this.y) !== Math.sign(this.dir.y)) this.y = center.y;
 
       if (this.atCenterOfTile()) {
-        // change direction at intersections
+        // Change direction at intersections
         if (this.nextDir.x || this.nextDir.y) {
           const nx = tx + this.nextDir.x; const ny = ty + this.nextDir.y;
           if (isPassable(nx, ny, forGhost)) {
             this.dir = this.nextDir;
+            this.nextDir = { x: 0, y: 0 }; // Clear next direction after applying
           }
         }
+        // Check if current direction is still valid
         const fx = tx + this.dir.x; const fy = ty + this.dir.y;
         if (!isPassable(fx, fy, forGhost)) {
           this.dir = { x: 0, y: 0 };
         }
       }
 
-      // Apply movement
-      this.x += this.dir.x * this.speed * dt;
-      this.y += this.dir.y * this.speed * dt;
+      // Calculate new position
+      const newX = this.x + this.dir.x * this.speed * dt;
+      const newY = this.y + this.dir.y * this.speed * dt;
+      
+      // Check collision before applying movement
+      const newTile = pixelToTile(newX, newY);
+      if (isPassable(newTile.x, newTile.y, forGhost)) {
+        this.x = newX;
+        this.y = newY;
+      } else {
+        // Stop movement if hitting wall
+        this.dir = { x: 0, y: 0 };
+        // Snap to center of current tile to prevent getting stuck
+        const currentCenter = tileCenter(tx, ty);
+        this.x = currentCenter.x;
+        this.y = currentCenter.y;
+      }
 
       // Horizontal tunnel wrap
-      const leftExit = -TILE / 2; // allow half tile beyond
+      const leftExit = -TILE / 2;
       const rightExit = COLS * TILE + TILE / 2;
       if (this.y > TUNNEL_Y * TILE && this.y < (TUNNEL_Y + 1) * TILE) {
         if (this.x < leftExit) this.x = rightExit;
@@ -227,26 +244,77 @@
       super(x, y, GHOST_SPEED);
       this.name = name;
       this.color = color;
-      this.scatterTarget = { x: 0, y: 0 };
+      this.scatterTarget = this.getScatterTarget(name);
       this.frightened = false;
       this.frightenedUntil = 0;
       this.eyeOnly = false;
       this.path = [];
       this.pathRecalcCooldown = 0; // seconds
       this.leaveHouseTimer = 0; // seconds to delay leaving
+      this.mode = 'chase'; // 'chase', 'scatter', 'frightened'
+      this.modeTimer = 0;
+    }
+    
+    getScatterTarget(name) {
+      // Each ghost has a different corner to scatter to
+      switch(name) {
+        case 'blinky': return { x: COLS - 1, y: 0 }; // top right
+        case 'pinky': return { x: 0, y: 0 }; // top left  
+        case 'inky': return { x: COLS - 1, y: ROWS - 1 }; // bottom right
+        case 'clyde': return { x: 0, y: ROWS - 1 }; // bottom left
+        default: return { x: 0, y: 0 };
+      }
+    }
+    
+    getChaseTarget(pacman) {
+      const pt = pacman.tile;
+      const pd = pacman.dir;
+      
+      switch(this.name) {
+        case 'blinky': // Red - direct chase
+          return pt;
+        case 'pinky': // Pink - ambush 4 tiles ahead
+          return { x: pt.x + pd.x * 4, y: pt.y + pd.y * 4 };
+        case 'inky': // Cyan - complex behavior relative to Blinky
+          const blinky = ghosts[0];
+          const bt = blinky.tile;
+          const ahead = { x: pt.x + pd.x * 2, y: pt.y + pd.y * 2 };
+          return { x: ahead.x + (ahead.x - bt.x), y: ahead.y + (ahead.y - bt.y) };
+        case 'clyde': // Orange - chase if far, scatter if close
+          const dist = Math.abs(pt.x - this.tile.x) + Math.abs(pt.y - this.tile.y);
+          return dist > 8 ? pt : this.scatterTarget;
+        default:
+          return pt;
+      }
     }
     setHouseDelay(seconds) { this.leaveHouseTimer = seconds; }
     isInHouse() {
       const t = this.tile;
       return t.y >= 12 && t.y <= 16 && t.x >= 11 && t.x <= 16; // around the center box
     }
-    update(dt, target) {
-      // frightened handling
+    update(dt, pacman) {
+      // Mode switching timer
+      this.modeTimer += dt;
+      
+      // Switch between chase and scatter modes periodically
+      if (!this.frightened && !this.eyeOnly) {
+        const cycleDuration = 20; // 20 seconds cycle
+        const cycleTime = this.modeTimer % cycleDuration;
+        if (cycleTime < 7) {
+          this.mode = 'scatter';
+        } else {
+          this.mode = 'chase';
+        }
+      }
+      
+      // Frightened handling
       if (this.frightened && performance.now() > this.frightenedUntil) {
         this.frightened = false;
         this.speed = GHOST_SPEED;
+        this.mode = 'chase';
       }
 
+      let target;
       if (this.eyeOnly) {
         this.speed = TILE * 9;
         // Target the house center to respawn
@@ -259,7 +327,17 @@
           this.speed = GHOST_SPEED;
           this.leaveHouseTimer = 1.2; // brief pause before leaving again
           this.path = [];
+          this.mode = 'chase';
         }
+      } else if (this.frightened) {
+        // Random movement when frightened
+        target = { x: Math.floor(Math.random() * COLS), y: Math.floor(Math.random() * ROWS) };
+        this.mode = 'frightened';
+      } else if (this.mode === 'scatter') {
+        target = this.scatterTarget;
+      } else {
+        // Chase mode - use individual ghost targeting
+        target = this.getChaseTarget(pacman);
       }
 
       // Delay leaving house at start of level
@@ -274,9 +352,13 @@
       this.pathRecalcCooldown -= dt;
       const t = this.tile;
       if (this.path.length === 0 || this.pathRecalcCooldown <= 0 || isIntersection(t.x, t.y)) {
-        this.path = aStar(t, target, this.eyeOnly ? true : true);
-        this.pathRecalcCooldown = 0.2 + Math.random() * 0.2;
+        // Ensure target is within bounds
+        target.x = clamp(target.x, 0, COLS - 1);
+        target.y = clamp(target.y, 0, ROWS - 1);
+        this.path = aStar(t, target, true);
+        this.pathRecalcCooldown = 0.15 + Math.random() * 0.1;
       }
+      
       // Follow path
       if (this.path.length > 0) {
         const next = this.path[0];
@@ -533,34 +615,91 @@
       }
       pacman.setDirection(dx, dy);
     };
-    // Support pointer, touch, mouse, and click for broader compatibility
-    el.addEventListener('pointerdown', (e)=>{ e.preventDefault(); set(); });
-    el.addEventListener('touchstart', (e)=>{ e.preventDefault(); set(); }, { passive: false });
-    el.addEventListener('mousedown', (e)=>{ e.preventDefault(); set(); });
-    el.addEventListener('click', (e)=>{ e.preventDefault(); set(); });
+    
+    // Enhanced mobile touch handling
+    let isPressed = false;
+    
+    const handleStart = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (!isPressed) {
+        isPressed = true;
+        el.style.transform = 'scale(0.95)';
+        el.style.backgroundColor = '#2f4cff';
+        set();
+      }
+    };
+    
+    const handleEnd = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      isPressed = false;
+      el.style.transform = 'scale(1)';
+      el.style.backgroundColor = '#111';
+    };
+    
+    // Multiple event types for maximum compatibility
+    el.addEventListener('touchstart', handleStart, { passive: false });
+    el.addEventListener('touchend', handleEnd, { passive: false });
+    el.addEventListener('touchcancel', handleEnd, { passive: false });
+    el.addEventListener('pointerdown', handleStart);
+    el.addEventListener('pointerup', handleEnd);
+    el.addEventListener('pointercancel', handleEnd);
+    el.addEventListener('mousedown', handleStart);
+    el.addEventListener('mouseup', handleEnd);
+    el.addEventListener('mouseleave', handleEnd);
   }
   bindBtn('btnUp', 0, -1); bindBtn('btnDown', 0, 1); bindBtn('btnLeft', -1, 0); bindBtn('btnRight', 1, 0);
 
-  // Swipe on canvas
+  // Enhanced swipe detection on canvas
   let touchStart = null;
-  const swipeThreshold = 12; // px minimal movement
+  let touchMoved = false;
+  const swipeThreshold = 20; // px minimal movement for swipe
+  
   canvas.addEventListener('touchstart', e => {
+    e.preventDefault();
     if (e.touches && e.touches[0]) {
       touchStart = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+      touchMoved = false;
     }
-  }, { passive: true });
+  }, { passive: false });
+  
+  canvas.addEventListener('touchmove', e => {
+    e.preventDefault();
+    if (touchStart && e.touches && e.touches[0]) {
+      const t = e.touches[0];
+      const dx = Math.abs(t.clientX - touchStart.x);
+      const dy = Math.abs(t.clientY - touchStart.y);
+      if (dx > 5 || dy > 5) touchMoved = true;
+    }
+  }, { passive: false });
+  
   canvas.addEventListener('touchend', e => {
+    e.preventDefault();
     if (!touchStart || !e.changedTouches || !e.changedTouches[0]) return;
+    
     const t = e.changedTouches[0];
-    const dx = t.clientX - touchStart.x; const dy = t.clientY - touchStart.y;
+    const dx = t.clientX - touchStart.x; 
+    const dy = t.clientY - touchStart.y;
+    const distance = Math.sqrt(dx * dx + dy * dy);
+    
     if (!state.running) {
       overlay.classList.remove('show');
       state.score = 0; state.lives = 3; state.level = 1; resetLevel(false); state.running = true; drawHUD();
     }
-    if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > swipeThreshold) pacman.setDirection(Math.sign(dx), 0);
-    else if (Math.abs(dy) >= Math.abs(dx) && Math.abs(dy) > swipeThreshold) pacman.setDirection(0, Math.sign(dy));
+    
+    // Only register swipe if there was significant movement
+    if (touchMoved && distance > swipeThreshold) {
+      if (Math.abs(dx) > Math.abs(dy)) {
+        pacman.setDirection(Math.sign(dx), 0);
+      } else {
+        pacman.setDirection(0, Math.sign(dy));
+      }
+    }
+    
     touchStart = null;
-  });
+    touchMoved = false;
+  }, { passive: false });
 
   // Collision detection Pac‑Man vs ghosts
   function checkCollisions() {
@@ -585,8 +724,7 @@
     last = now;
     if (state.running) {
       pacman.update(dt);
-      const target = pacman.tile;
-      for (const g of ghosts) g.update(dt, g.frightened ? { x: COLS-1-target.x, y: ROWS-1-target.y } : target);
+      for (const g of ghosts) g.update(dt, pacman);
       checkCollisions();
       drawMaze();
       pacman.draw();
