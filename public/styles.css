@@ -84,9 +84,11 @@ canvas#game {
 .controls { width: 100%; display: grid; place-items: center; padding: 10px 0 16px; }
 .dpad {
   display: grid;
-  grid-template-rows: repeat(3, 56px);
-  grid-template-columns: 56px 56px 56px;
-  gap: 10px;
+  grid-template-rows: repeat(3, 60px);
+  grid-template-columns: repeat(3, 60px);
+  gap: 8px;
+  justify-items: center;
+  align-items: center;
 }
 .dpad button {
   background: #111;
@@ -103,6 +105,11 @@ canvas#game {
   -webkit-user-select: none;
   -moz-user-select: none;
   -ms-user-select: none;
+  width: 60px;
+  height: 60px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .dpad button:active {
@@ -110,7 +117,9 @@ canvas#game {
   background-color: #2f4cff;
 }
 .dpad #btnUp { grid-column: 2; grid-row: 1; }
-.dpad .middle { grid-column: 1 / span 3; grid-row: 2; display: flex; justify-content: center; gap: 10px; }
+.dpad .middle { grid-column: 1 / span 3; grid-row: 2; display: flex; justify-content: space-between; align-items: center; }
+.dpad #btnLeft { width: 60px; height: 60px; }
+.dpad #btnRight { width: 60px; height: 60px; }
 .dpad #btnDown { grid-column: 2; grid-row: 3; }
 
 @media (min-width: 700px) {
