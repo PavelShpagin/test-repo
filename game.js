@@ -211,7 +211,9 @@ function updateGhosts() {
         ghost.moveCounter++;
         
         // Change direction randomly at intersections or when stuck
-        if (ghost.moveCounter % 30 === 0 || !canMove(ghost.x, ghost.y, ghost.direction, GHOST_SPEED)) {
+        // Use different intervals for each ghost to make movement more varied
+        const changeInterval = 25 + (ghosts.indexOf(ghost) * 5); // Each ghost has slightly different timing
+        if (ghost.moveCounter % changeInterval === 0 || !canMove(ghost.x, ghost.y, ghost.direction, GHOST_SPEED)) {
             const possibleDirections = [];
             
             // Get opposite direction to avoid immediate reversals
@@ -346,8 +348,10 @@ function draw() {
     ctx.closePath();
     ctx.fill();
     
-    // Draw ghosts
+    // Draw ghosts with slight transparency for better overlap visibility
     for (let ghost of ghosts) {
+        ctx.save();
+        ctx.globalAlpha = 0.9; // Slight transparency so overlapping ghosts are visible
         ctx.fillStyle = ghost.color;
         
         // Ghost body
@@ -383,6 +387,8 @@ function draw() {
         ctx.arc(ghost.x - 3, ghost.y - 2, 1.5, 0, Math.PI * 2);
         ctx.arc(ghost.x + 5, ghost.y - 2, 1.5, 0, Math.PI * 2);
         ctx.fill();
+        
+        ctx.restore(); // Restore the global alpha
     }
 }
 
