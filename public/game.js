@@ -200,66 +200,85 @@
       this.mouthAngle += this.animSpeed * deltaTime;
       if (this.mouthAngle > Math.PI * 2) this.mouthAngle = 0;
 
-      // Check if we can change direction
-      const nextTileX = this.tileX + this.nextDirection.x;
-      const nextTileY = this.tileY + this.nextDirection.y;
-      
-      if (this.nextDirection.x !== 0 || this.nextDirection.y !== 0) {
+      // Check if we're at tile center for direction changes
+      const centerX = this.tileX * TILE + TILE / 2;
+      const centerY = this.tileY * TILE + TILE / 2;
+      const atCenter = Math.abs(this.x - centerX) < 4 && Math.abs(this.y - centerY) < 4;
+
+      if (atCenter && (this.nextDirection.x !== 0 || this.nextDirection.y !== 0)) {
+        const nextTileX = this.tileX + this.nextDirection.x;
+        const nextTileY = this.tileY + this.nextDirection.y;
+        
         if (isValidPosition(nextTileX, nextTileY)) {
           this.direction = { ...this.nextDirection };
           this.nextDirection = { x: 0, y: 0 };
+          // Snap to exact center for perfect alignment
+          this.x = centerX;
+          this.y = centerY;
         }
       }
 
-      // Move Pac-Man
-      const newX = this.x + this.direction.x * this.speed * deltaTime;
-      const newY = this.y + this.direction.y * this.speed * deltaTime;
-      
-      const newTileX = Math.floor(newX / TILE);
-      const newTileY = Math.floor(newY / TILE);
+      // Move Pac-Man with corridor containment
+      if (this.direction.x !== 0 || this.direction.y !== 0) {
+        const newX = this.x + this.direction.x * this.speed * deltaTime;
+        const newY = this.y + this.direction.y * this.speed * deltaTime;
+        
+        const newTileX = Math.floor(newX / TILE);
+        const newTileY = Math.floor(newY / TILE);
 
-      // Check if new position is valid
-      if (isValidPosition(newTileX, newTileY)) {
-        this.x = newX;
-        this.y = newY;
-        this.tileX = newTileX;
-        this.tileY = newTileY;
-      } else {
-        // Stop at wall
-        this.direction = { x: 0, y: 0 };
+        // Check if new position is valid
+        if (isValidPosition(newTileX, newTileY)) {
+          // Keep Pac-Man centered in corridor
+          const corridorCenterX = newTileX * TILE + TILE / 2;
+          const corridorCenterY = newTileY * TILE + TILE / 2;
+          const margin = TILE * 0.3; // 30% margin from walls
+          
+          // Clamp to corridor bounds
+          this.x = Math.max(corridorCenterX - margin, Math.min(corridorCenterX + margin, newX));
+          this.y = Math.max(corridorCenterY - margin, Math.min(corridorCenterY + margin, newY));
+          this.tileX = newTileX;
+          this.tileY = newTileY;
+        } else {
+          // Stop at wall and snap to corridor center
+          this.x = centerX;
+          this.y = centerY;
+          this.direction = { x: 0, y: 0 };
+        }
       }
 
-      // Tunnel wrap-around
-      if (this.x < 0) {
-        this.x = canvas.width;
+      // Tunnel wrap-around with proper centering
+      if (this.x < -TILE/2) {
+        this.x = canvas.width + TILE/2;
         this.tileX = COLS - 1;
-      } else if (this.x > canvas.width) {
-        this.x = 0;
+      } else if (this.x > canvas.width + TILE/2) {
+        this.x = -TILE/2;
         this.tileX = 0;
       }
 
-      // Eat dots and power pellets
-      const currentTile = grid[this.tileY] && grid[this.tileY][this.tileX];
-      if (currentTile === DOT) {
-        grid[this.tileY][this.tileX] = EMPTY;
-        game.score += 10;
-        game.dotsRemaining--;
-        createParticles(this.x, this.y, '#FFFF00', 4);
-        playEatSound();
-        
-        if (game.dotsRemaining <= 0) {
-          nextLevel();
-        }
-      } else if (currentTile === POWER) {
-        grid[this.tileY][this.tileX] = EMPTY;
-        game.score += 50;
-        game.dotsRemaining--;
-        createParticles(this.x, this.y, '#FFB8FF', 8);
-        activateFrightenedMode();
-        playPowerSound();
-        
-        if (game.dotsRemaining <= 0) {
-          nextLevel();
+      // Eat dots and power pellets (only when properly centered)
+      if (atCenter) {
+        const currentTile = grid[this.tileY] && grid[this.tileY][this.tileX];
+        if (currentTile === DOT) {
+          grid[this.tileY][this.tileX] = EMPTY;
+          game.score += 10;
+          game.dotsRemaining--;
+          createParticles(this.x, this.y, '#FFFF00', 4);
+          playEatSound();
+          
+          if (game.dotsRemaining <= 0) {
+            nextLevel();
+          }
+        } else if (currentTile === POWER) {
+          grid[this.tileY][this.tileX] = EMPTY;
+          game.score += 50;
+          game.dotsRemaining--;
+          createParticles(this.x, this.y, '#FFB8FF', 8);
+          activateFrightenedMode();
+          playPowerSound();
+          
+          if (game.dotsRemaining <= 0) {
+            nextLevel();
+          }
         }
       }
     }
@@ -358,29 +377,40 @@
         this.chooseSimpleDirection(pacman);
       }
 
-      // Move ghost
-      const newX = this.x + this.direction.x * this.speed * deltaTime;
-      const newY = this.y + this.direction.y * this.speed * deltaTime;
-      
-      const newTileX = Math.floor(newX / TILE);
-      const newTileY = Math.floor(newY / TILE);
+      // Move ghost with corridor containment
+      if (this.direction.x !== 0 || this.direction.y !== 0) {
+        const newX = this.x + this.direction.x * this.speed * deltaTime;
+        const newY = this.y + this.direction.y * this.speed * deltaTime;
+        
+        const newTileX = Math.floor(newX / TILE);
+        const newTileY = Math.floor(newY / TILE);
 
-      if (isValidPosition(newTileX, newTileY)) {
-        this.x = newX;
-        this.y = newY;
-        this.tileX = newTileX;
-        this.tileY = newTileY;
-      } else {
-        // Hit wall - choose new direction immediately
-        this.chooseSimpleDirection(pacman);
+        if (isValidPosition(newTileX, newTileY)) {
+          // Keep ghost centered in corridor
+          const corridorCenterX = newTileX * TILE + TILE / 2;
+          const corridorCenterY = newTileY * TILE + TILE / 2;
+          const margin = TILE * 0.3; // 30% margin from walls
+          
+          // Clamp to corridor bounds
+          this.x = Math.max(corridorCenterX - margin, Math.min(corridorCenterX + margin, newX));
+          this.y = Math.max(corridorCenterY - margin, Math.min(corridorCenterY + margin, newY));
+          this.tileX = newTileX;
+          this.tileY = newTileY;
+        } else {
+          // Hit wall - snap to corridor center and choose new direction
+          const center = getTileCenter(this.tileX, this.tileY);
+          this.x = center.x;
+          this.y = center.y;
+          this.chooseSimpleDirection(pacman);
+        }
       }
 
-      // Tunnel wrap-around
-      if (this.x < 0) {
-        this.x = canvas.width;
+      // Tunnel wrap-around with proper centering
+      if (this.x < -TILE/2) {
+        this.x = canvas.width + TILE/2;
         this.tileX = COLS - 1;
-      } else if (this.x > canvas.width) {
-        this.x = 0;
+      } else if (this.x > canvas.width + TILE/2) {
+        this.x = -TILE/2;
         this.tileX = 0;
       }
     }
