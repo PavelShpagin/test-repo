@@ -50,6 +50,10 @@
     dotsRemaining: 0,
   };
 
+  // Occupancy flags for memory-based collisions
+  const OCC_PACMAN = 1;
+  const OCC_GHOST = 2; // one or more ghosts may share a tile
+
   // Convenience
   function clamp(value, min, max) { return Math.max(min, Math.min(max, value)); }
   function tileCenter(x, y) { return { x: x * TILE + TILE / 2, y: y * TILE + TILE / 2 }; }
@@ -116,6 +120,26 @@
     }
   }
 
+  // Occupancy grid for memory-based collisions
+  const occupancy = new Array(ROWS);
+  for (let y = 0; y < ROWS; y++) occupancy[y] = new Array(COLS).fill(0);
+
+  function rebuildOccupancy() {
+    for (let y = 0; y < ROWS; y++) {
+      occupancy[y].fill(0);
+    }
+    if (typeof pacman !== 'undefined') {
+      const pt = pacman.tile;
+      if (isInside(pt.x, pt.y)) occupancy[pt.y][pt.x] |= OCC_PACMAN;
+    }
+    if (typeof ghosts !== 'undefined') {
+      for (const g of ghosts) {
+        const gt = g.tile;
+        if (isInside(gt.x, gt.y)) occupancy[gt.y][gt.x] |= OCC_GHOST;
+      }
+    }
+  }
+
   // Teleport tunnel columns (left/right wrap). We'll use row 17 (center) as the tunnel.
   const TUNNEL_Y = 17;
 
@@ -152,6 +176,7 @@
       this.dir = { x: 0, y: 0 };
       this.nextDir = { x: 0, y: 0 };
       this.speed = speed;
+      this.prevTile = { x, y };
     }
     get tile() { return pixelToTile(this.x, this.y); }
     atCenterOfTile() {
@@ -227,6 +252,12 @@
       if (this.y > TUNNEL_Y * TILE && this.y < (TUNNEL_Y + 1) * TILE) {
         if (this.x < leftExit) this.x = rightExit;
         if (this.x > rightExit) this.x = leftExit;
+      }
+
+      // Update previous tile when crossing into a new tile
+      const nt = this.tile;
+      if (nt.x !== tx || nt.y !== ty) {
+        this.prevTile = { x: tx, y: ty };
       }
     }
   }
@@ -692,7 +723,10 @@
       g.mode = 'chase';
       g.modeTimer = 0;
       g.pathRecalcCooldown = 0;
+      g.prevTile = { x: gpos[i][0], y: gpos[i][1] };
     });
+    pacman.prevTile = { x: 14, y: 29 };
+    rebuildOccupancy();
   }
 
   function resetLevel(newLevel=false) {
@@ -842,18 +876,29 @@
 
   // Collision detection Pac‑Man vs ghosts
   function checkCollisions() {
+    // Rebuild occupancy based on current tile locations
+    rebuildOccupancy();
+
+    const pt = pacman.tile;
+    // Direct same-tile collision
+    let collided = false;
     for (const g of ghosts) {
-      const dist = Math.hypot(g.x - pacman.x, g.y - pacman.y);
-      if (dist < TILE * COLLISION_RADIUS_FACTOR) {
+      const gt = g.tile;
+      const sameTile = gt.x === pt.x && gt.y === pt.y;
+      const crossed = g.prevTile && pacman.prevTile &&
+        gt.x === pacman.prevTile.x && gt.y === pacman.prevTile.y &&
+        g.prevTile.x === pt.x && g.prevTile.y === pt.y; // passed through each other
+      if (sameTile || crossed) {
         if (g.frightened && !g.eyeOnly) {
           state.score += 200;
           g.eyeOnly = true; g.frightened = false; g.path = [];
         } else if (!g.eyeOnly) {
-          loseLife();
+          collided = true;
           break;
         }
       }
     }
+    if (collided) loseLife();
   }
 
   // Main loop
