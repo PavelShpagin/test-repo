@@ -190,17 +190,30 @@ function setupControls() {
     });
 }
 
-function canMove(gridX, gridY, direction) {
+function canMove(x, y, direction) {
     if (!direction) return false;
     
-    const newX = Math.floor(gridX + direction.x);
-    const newY = Math.floor(gridY + direction.y);
+    // Calculate next position
+    const nextX = x + direction.x * pacman.speed;
+    const nextY = y + direction.y * pacman.speed;
     
-    if (newX < 0 || newX >= COLS || newY < 0 || newY >= ROWS) {
+    // Check the cell we're moving into
+    let checkX, checkY;
+    
+    if (direction.x > 0) checkX = Math.floor(nextX + 0.4);
+    else if (direction.x < 0) checkX = Math.floor(nextX - 0.4 + 1);
+    else checkX = Math.floor(nextX);
+    
+    if (direction.y > 0) checkY = Math.floor(nextY + 0.4);
+    else if (direction.y < 0) checkY = Math.floor(nextY - 0.4 + 1);
+    else checkY = Math.floor(nextY);
+    
+    // Bounds check
+    if (checkX < 0 || checkX >= COLS || checkY < 0 || checkY >= ROWS) {
         return false;
     }
     
-    return grid[newY][newX] !== 1;
+    return grid[checkY][checkX] !== 1;
 }
 
 function updatePacman() {
@@ -208,24 +221,47 @@ function updatePacman() {
     pacman.gridX = Math.round(pacman.x);
     pacman.gridY = Math.round(pacman.y);
     
-    // Check for direction change
+    // Check for direction change at grid intersections
     if (pacman.nextDirection) {
-        const nearGrid = Math.abs(pacman.x - pacman.gridX) < 0.3 && 
-                        Math.abs(pacman.y - pacman.gridY) < 0.3;
+        const atIntersection = Math.abs(pacman.x - pacman.gridX) < 0.2 && 
+                              Math.abs(pacman.y - pacman.gridY) < 0.2;
         
-        if (nearGrid && canMove(pacman.gridX, pacman.gridY, pacman.nextDirection)) {
-            pacman.direction = pacman.nextDirection;
-            pacman.nextDirection = null;
-            pacman.x = pacman.gridX;
-            pacman.y = pacman.gridY;
+        if (atIntersection) {
+            // Test if we can move in the new direction
+            const testX = pacman.gridX;
+            const testY = pacman.gridY;
+            const nextX = testX + pacman.nextDirection.x;
+            const nextY = testY + pacman.nextDirection.y;
+            
+            if (nextX >= 0 && nextX < COLS && nextY >= 0 && nextY < ROWS &&
+                grid[nextY][nextX] !== 1) {
+                pacman.direction = pacman.nextDirection;
+                pacman.nextDirection = null;
+                // Snap to grid for smooth turning
+                pacman.x = pacman.gridX;
+                pacman.y = pacman.gridY;
+            }
         }
     }
     
-    // Move pacman
-    if (pacman.direction && canMove(pacman.x, pacman.y, pacman.direction)) {
-        pacman.x += pacman.direction.x * pacman.speed;
-        pacman.y += pacman.direction.y * pacman.speed;
-        pacman.moving = true;
+    // Move pacman continuously until hitting a wall
+    if (pacman.direction) {
+        const nextX = pacman.x + pacman.direction.x * pacman.speed;
+        const nextY = pacman.y + pacman.direction.y * pacman.speed;
+        
+        // Check if next position would hit a wall
+        if (canMove(pacman.x, pacman.y, pacman.direction)) {
+            pacman.x = nextX;
+            pacman.y = nextY;
+            pacman.moving = true;
+        } else {
+            // Align to grid edge when hitting wall
+            if (pacman.direction.x > 0) pacman.x = Math.floor(pacman.x + 0.5);
+            else if (pacman.direction.x < 0) pacman.x = Math.ceil(pacman.x - 0.5);
+            if (pacman.direction.y > 0) pacman.y = Math.floor(pacman.y + 0.5);
+            else if (pacman.direction.y < 0) pacman.y = Math.ceil(pacman.y - 0.5);
+            pacman.moving = false;
+        }
     } else {
         pacman.moving = false;
     }
@@ -271,7 +307,12 @@ function updateGhosts() {
                     dir.y === -ghost.direction.y) {
                     return false;
                 }
-                return canMove(ghost.gridX, ghost.gridY, dir);
+                // Check if can move in this direction
+                const nextX = ghost.gridX + dir.x;
+                const nextY = ghost.gridY + dir.y;
+                return nextX >= 0 && nextX < COLS && 
+                       nextY >= 0 && nextY < ROWS && 
+                       grid[nextY][nextX] !== 1;
             });
             
             // Choose random direction
