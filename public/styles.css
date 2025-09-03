@@ -4,10 +4,13 @@
 }
 
 :root {
-  --bg: #000;
+  --bg: linear-gradient(135deg, #0a0a0a, #1a1a2e, #16213e);
   --hud: #ffe300;
   --maze: #003cff;
   --text: #fff;
+  --neon-blue: #00ffff;
+  --neon-pink: #ff00ff;
+  --button-size: 64px;
 }
 
 * { box-sizing: border-box; }
@@ -20,6 +23,8 @@ body {
   display: grid;
   grid-template-rows: auto 1fr auto;
   place-items: center;
+  min-height: 100vh;
+  overflow-x: hidden;
 }
 
 #hud {
@@ -28,9 +33,12 @@ body {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 8px 12px;
+  padding: 12px 16px;
   color: var(--hud);
-  text-shadow: 0 0 6px rgba(255, 227, 0, 0.6);
+  text-shadow: 0 0 10px rgba(255, 227, 0, 0.8), 0 0 20px rgba(255, 227, 0, 0.4);
+  background: linear-gradient(90deg, transparent, rgba(255, 227, 0, 0.1), transparent);
+  border-radius: 8px;
+  backdrop-filter: blur(5px);
 }
 
 #hud .brand { letter-spacing: 2px; }
@@ -40,11 +48,24 @@ canvas#game {
   width: min(95vw, 570px);
   height: calc(min(95vw, 570px) * (21/19));
   image-rendering: pixelated;
-  border-radius: 8px;
-  box-shadow: 0 0 0 4px #001b8f, 0 0 24px rgba(0, 0, 0, 0.6) inset;
+  border-radius: 12px;
+  box-shadow: 
+    0 0 0 4px #001b8f,
+    0 0 20px rgba(0, 255, 255, 0.3),
+    0 0 40px rgba(0, 100, 255, 0.2),
+    inset 0 0 30px rgba(0, 0, 0, 0.8);
   touch-action: none;
   -webkit-tap-highlight-color: transparent;
   cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+canvas#game:hover {
+  box-shadow: 
+    0 0 0 4px #0040ff,
+    0 0 30px rgba(0, 255, 255, 0.5),
+    0 0 60px rgba(0, 100, 255, 0.3),
+    inset 0 0 30px rgba(0, 0, 0, 0.8);
 }
 
 .overlay {
@@ -53,73 +74,127 @@ canvas#game {
   display: none;
   align-items: center;
   justify-content: center;
-  background: rgba(0,0,0,0.6);
+  background: radial-gradient(circle, rgba(0,20,40,0.9), rgba(0,0,0,0.95));
+  backdrop-filter: blur(10px);
 }
 .overlay.show { display: flex; }
 .overlay .panel {
-  background: #0b0b0b;
-  border: 2px solid #1c2cff;
-  padding: 20px 24px;
-  border-radius: 10px;
+  background: linear-gradient(135deg, #0f0f23, #1a1a2e);
+  border: 2px solid var(--neon-blue);
+  padding: 30px 40px;
+  border-radius: 15px;
   text-align: center;
+  box-shadow: 
+    0 0 30px rgba(0, 255, 255, 0.3),
+    inset 0 0 20px rgba(0, 100, 255, 0.1);
 }
-.overlay .panel h1 { margin: 8px 0 12px; font-size: 24px; color: var(--hud); }
-.overlay .panel p { margin: 8px 0; font-size: 12px; line-height: 1.4; }
+.overlay .panel h1 { 
+  margin: 8px 0 16px; 
+  font-size: 28px; 
+  color: var(--hud); 
+  text-shadow: 0 0 15px rgba(255, 227, 0, 0.8);
+}
+.overlay .panel p { 
+  margin: 12px 0; 
+  font-size: 14px; 
+  line-height: 1.6; 
+  color: #cccccc;
+}
 .overlay button {
-  background: var(--maze);
-  border: none;
+  background: linear-gradient(45deg, var(--maze), #0040ff);
+  border: 2px solid var(--neon-blue);
   color: white;
-  padding: 12px 24px;
-  border-radius: 8px;
-  font-size: 16px;
+  padding: 16px 32px;
+  border-radius: 12px;
+  font-size: 18px;
+  font-weight: bold;
   cursor: pointer;
-  transition: all 0.2s ease;
-  margin-top: 10px;
+  transition: all 0.3s ease;
+  margin-top: 20px;
+  text-shadow: 0 0 10px rgba(255, 255, 255, 0.8);
+  box-shadow: 0 0 20px rgba(0, 255, 255, 0.3);
 }
 .overlay button:hover {
-  background: #0040ff;
-  transform: scale(1.05);
+  background: linear-gradient(45deg, #0040ff, #0060ff);
+  transform: scale(1.08) translateY(-2px);
+  box-shadow: 0 0 30px rgba(0, 255, 255, 0.6);
 }
 
-.controls { width: 100%; display: grid; place-items: center; padding: 10px 0 16px; }
+.controls { 
+  width: 100%; 
+  display: grid; 
+  place-items: center; 
+  padding: 15px 0 20px; 
+  background: linear-gradient(180deg, transparent, rgba(0, 50, 100, 0.1));
+}
 .dpad {
   display: grid;
-  grid-template-rows: repeat(3, 60px);
-  grid-template-columns: repeat(3, 60px);
-  gap: 8px;
+  grid-template-rows: repeat(3, var(--button-size));
+  grid-template-columns: repeat(3, var(--button-size));
+  gap: 12px;
   justify-items: center;
   align-items: center;
+  padding: 20px;
+  background: radial-gradient(circle, rgba(0, 100, 200, 0.1), transparent);
+  border-radius: 20px;
+  backdrop-filter: blur(5px);
 }
 .dpad button {
-  background: #111;
-  color: #eee;
-  border: 2px solid #2f4cff;
-  border-radius: 10px;
-  font-size: 18px;
+  background: linear-gradient(135deg, #1a1a2e, #16213e);
+  color: var(--neon-blue);
+  border: 2px solid var(--neon-blue);
+  border-radius: 12px;
+  font-size: 20px;
+  font-weight: bold;
   touch-action: manipulation;
   user-select: none;
   cursor: pointer;
-  transition: all 0.1s ease;
+  transition: all 0.2s ease;
   -webkit-tap-highlight-color: transparent;
   -webkit-touch-callout: none;
   -webkit-user-select: none;
   -moz-user-select: none;
   -ms-user-select: none;
-  width: 60px;
-  height: 60px;
+  width: var(--button-size);
+  height: var(--button-size);
   display: flex;
   align-items: center;
   justify-content: center;
+  box-shadow: 
+    0 0 15px rgba(0, 255, 255, 0.2),
+    inset 0 0 10px rgba(0, 100, 255, 0.1);
+  text-shadow: 0 0 10px rgba(0, 255, 255, 0.8);
 }
 
 .dpad button:active {
-  transform: scale(0.95);
-  background-color: #2f4cff;
+  transform: scale(0.92);
+  background: linear-gradient(135deg, var(--neon-blue), #0080ff);
+  color: #000;
+  box-shadow: 
+    0 0 25px rgba(0, 255, 255, 0.6),
+    inset 0 0 15px rgba(255, 255, 255, 0.2);
 }
+
+.dpad button:hover {
+  background: linear-gradient(135deg, #2a2a3e, #26314e);
+  box-shadow: 
+    0 0 20px rgba(0, 255, 255, 0.4),
+    inset 0 0 15px rgba(0, 100, 255, 0.2);
+}
+
 .dpad #btnUp { grid-column: 2; grid-row: 1; }
-.dpad .middle { grid-column: 1 / span 3; grid-row: 2; display: flex; justify-content: space-between; align-items: center; }
-.dpad #btnLeft { width: 60px; height: 60px; }
-.dpad #btnRight { width: 60px; height: 60px; }
+.dpad .middle { 
+  grid-column: 1 / span 3; 
+  grid-row: 2; 
+  display: flex; 
+  justify-content: space-between; 
+  align-items: center; 
+  width: 100%;
+}
+.dpad #btnLeft, .dpad #btnRight { 
+  width: var(--button-size); 
+  height: var(--button-size); 
+}
 .dpad #btnDown { grid-column: 2; grid-row: 3; }
 
 @media (min-width: 700px) {
