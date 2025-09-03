@@ -221,7 +221,22 @@
           this.tileX = newTileX;
           this.tileY = newTileY;
         } else {
-          // Hit wall - stop and center
+          // Anti-overshoot: stop before hitting wall
+          const buffer = TILE * 0.15; // 15% buffer from wall
+          
+          if (this.direction.x > 0) {
+            this.x = Math.min(this.x, (this.tileX + 1) * TILE - buffer);
+          } else if (this.direction.x < 0) {
+            this.x = Math.max(this.x, this.tileX * TILE + buffer);
+          }
+          
+          if (this.direction.y > 0) {
+            this.y = Math.min(this.y, (this.tileY + 1) * TILE - buffer);
+          } else if (this.direction.y < 0) {
+            this.y = Math.max(this.y, this.tileY * TILE + buffer);
+          }
+          
+          // Stop and center
           this.x = centerX;
           this.y = centerY;
           this.direction = { x: 0, y: 0 };
@@ -372,7 +387,22 @@
           this.tileX = newTileX;
           this.tileY = newTileY;
         } else {
-          // Hit wall - center and get new direction
+          // Anti-overshoot: stop before hitting wall
+          const buffer = TILE * 0.15; // 15% buffer from wall
+          
+          if (this.direction.x > 0) {
+            this.x = Math.min(this.x, (this.tileX + 1) * TILE - buffer);
+          } else if (this.direction.x < 0) {
+            this.x = Math.max(this.x, this.tileX * TILE + buffer);
+          }
+          
+          if (this.direction.y > 0) {
+            this.y = Math.min(this.y, (this.tileY + 1) * TILE - buffer);
+          } else if (this.direction.y < 0) {
+            this.y = Math.max(this.y, this.tileY * TILE + buffer);
+          }
+          
+          // Stop and center
           const center = getTileCenter(this.tileX, this.tileY);
           this.x = center.x;
           this.y = center.y;
