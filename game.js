@@ -81,6 +81,9 @@ function init() {
     
     // Set up keyboard controls
     setupControls();
+    
+    // Draw initial frame to prevent flicker
+    draw();
 }
 
 function initializeEntities() {
@@ -99,11 +102,12 @@ function initializeEntities() {
                 pacman.y = y * CELL_SIZE + CELL_SIZE / 2;
                 maze[y][x] = 9; // Clear the cell
             } else if (cell >= 3 && cell <= 6) {
+                const directions = Object.values(DIRECTIONS);
                 ghosts.push({
                     x: x * CELL_SIZE + CELL_SIZE / 2,
                     y: y * CELL_SIZE + CELL_SIZE / 2,
                     color: getGhostColor(cell - 3),
-                    direction: DIRECTIONS.UP,
+                    direction: directions[Math.floor(Math.random() * directions.length)], // Random initial direction
                     previousDirection: null,
                     moveCounter: Math.floor(Math.random() * 30) // Randomize initial move timing
                 });
@@ -210,49 +214,39 @@ function updateGhosts() {
     for (let ghost of ghosts) {
         ghost.moveCounter++;
         
-        // Change direction randomly at intersections or when stuck
+        // Change direction randomly at intervals
         // Use different intervals for each ghost to make movement more varied
         const changeInterval = 25 + (ghosts.indexOf(ghost) * 5); // Each ghost has slightly different timing
-        if (ghost.moveCounter % changeInterval === 0 || !canMove(ghost.x, ghost.y, ghost.direction, GHOST_SPEED)) {
-            const possibleDirections = [];
+        if (ghost.moveCounter % changeInterval === 0) {
+            const possibleDirections = Object.values(DIRECTIONS);
             
-            // Get opposite direction to avoid immediate reversals
-            const oppositeDir = {
-                x: -ghost.direction.x,
-                y: -ghost.direction.y
-            };
-            
-            for (let dir of Object.values(DIRECTIONS)) {
-                // Check if can move and avoid reversing unless necessary
-                if (canMove(ghost.x, ghost.y, dir, GHOST_SPEED)) {
-                    // Prefer not to reverse direction unless it's the only option
-                    if (ghost.previousDirection && dir.x === -ghost.previousDirection.x && 
-                        dir.y === -ghost.previousDirection.y && possibleDirections.length > 0) {
-                        continue;
-                    }
-                    possibleDirections.push(dir);
+            // Avoid immediate reversals for more natural movement
+            if (ghost.previousDirection) {
+                const filtered = possibleDirections.filter(dir => 
+                    !(dir.x === -ghost.previousDirection.x && dir.y === -ghost.previousDirection.y)
+                );
+                if (filtered.length > 0) {
+                    ghost.previousDirection = ghost.direction;
+                    ghost.direction = filtered[Math.floor(Math.random() * filtered.length)];
+                } else {
+                    // If only reversal is available, use it
+                    ghost.previousDirection = ghost.direction;
+                    ghost.direction = possibleDirections[Math.floor(Math.random() * possibleDirections.length)];
                 }
-            }
-            
-            if (possibleDirections.length > 0) {
-                ghost.previousDirection = ghost.direction;
-                ghost.direction = possibleDirections[Math.floor(Math.random() * possibleDirections.length)];
             } else {
-                // If completely stuck, try to move to center of current cell
-                const gridX = Math.round(ghost.x / CELL_SIZE);
-                const gridY = Math.round(ghost.y / CELL_SIZE);
-                ghost.x = gridX * CELL_SIZE + CELL_SIZE / 2;
-                ghost.y = gridY * CELL_SIZE + CELL_SIZE / 2;
-                ghost.direction = DIRECTIONS.UP; // Reset direction
-                ghost.previousDirection = null;
+                ghost.direction = possibleDirections[Math.floor(Math.random() * possibleDirections.length)];
             }
         }
         
-        // Move ghost
-        if (canMove(ghost.x, ghost.y, ghost.direction, GHOST_SPEED)) {
-            ghost.x += ghost.direction.x * GHOST_SPEED;
-            ghost.y += ghost.direction.y * GHOST_SPEED;
-        }
+        // Move ghost (no wall collision - ghosts pass through walls)
+        ghost.x += ghost.direction.x * GHOST_SPEED;
+        ghost.y += ghost.direction.y * GHOST_SPEED;
+        
+        // Wrap around screen edges
+        if (ghost.x < 0) ghost.x = canvas.width;
+        if (ghost.x > canvas.width) ghost.x = 0;
+        if (ghost.y < 0) ghost.y = canvas.height;
+        if (ghost.y > canvas.height) ghost.y = 0;
         
         // Check collision with Pacman
         const distance = Math.sqrt(Math.pow(pacman.x - ghost.x, 2) + Math.pow(pacman.y - ghost.y, 2));
