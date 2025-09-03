@@ -1,6 +1,6 @@
 /*
-  Pac‑Man JS – Production Ready for Pixel 8
-  Optimized for 20:9 aspect ratio with working movement
+  Pac‑Man JS – Grid-Based Memory System
+  Complete remake with proper grid-based collision and BFS pathfinding
 */
 
 (function() {
@@ -23,13 +23,18 @@
   const ROWS = 21;
   const TILE = Math.floor(canvas.width / COLS);
   
-  // Tile types
-  const WALL = 1;
-  const DOT = 2;
-  const POWER = 3;
+  // Grid cell types
   const EMPTY = 0;
+  const WALL = 1;
+  const PACMAN = 2;
+  const GHOST_1 = 3;
+  const GHOST_2 = 4;
+  const GHOST_3 = 5;
+  const GHOST_4 = 6;
+  const DOT = 7;
+  const POWER = 8;
   
-  // Game speeds
+  // Game speeds (moves per second)
   const PACMAN_SPEED = 4;
   const GHOST_SPEED = 3;
   const FRIGHTENED_SPEED = 2;
@@ -37,8 +42,8 @@
   // Game timers
   const FRIGHTENED_TIME = 8000;
   
-  // Simple working maze
-  const MAZE = [
+  // Maze layout template
+  const MAZE_TEMPLATE = [
     '###################',
     '#........#........#',
     '#.##.###.#.###.##.#',
@@ -76,6 +81,149 @@
     particles: []
   };
 
+  // Memory grid system
+  class GameGrid {
+    constructor() {
+      this.grid = [];
+      this.staticGrid = []; // For walls, dots, power pellets
+      this.initialize();
+    }
+
+    initialize() {
+      // Initialize both grids
+      this.grid = [];
+      this.staticGrid = [];
+      game.dotsRemaining = 0;
+
+      for (let y = 0; y < ROWS; y++) {
+        this.grid[y] = [];
+        this.staticGrid[y] = [];
+        for (let x = 0; x < COLS; x++) {
+          const char = MAZE_TEMPLATE[y][x];
+          
+          // Static grid (walls, dots, power pellets)
+          switch (char) {
+            case '#':
+              this.staticGrid[y][x] = WALL;
+              break;
+            case '.':
+              this.staticGrid[y][x] = DOT;
+              game.dotsRemaining++;
+              break;
+            case 'o':
+              this.staticGrid[y][x] = POWER;
+              game.dotsRemaining++;
+              break;
+            default:
+              this.staticGrid[y][x] = EMPTY;
+              break;
+          }
+          
+          // Dynamic grid (entities)
+          this.grid[y][x] = this.staticGrid[y][x];
+        }
+      }
+    }
+
+    isValidMove(x, y, entityType = EMPTY) {
+      if (x < 0 || y < 0 || x >= COLS || y >= ROWS) return false;
+      
+      const cell = this.grid[y][x];
+      
+      // Walls are always blocked
+      if (cell === WALL) return false;
+      
+      // For pathfinding, treat other entities as obstacles
+      if (entityType === EMPTY) {
+        return cell === EMPTY || cell === DOT || cell === POWER;
+      }
+      
+      // For entity movement, check if cell is free or contains collectibles
+      return cell === EMPTY || cell === DOT || cell === POWER;
+    }
+
+    moveEntity(fromX, fromY, toX, toY, entityType) {
+      // Clear old position
+      if (fromX >= 0 && fromY >= 0 && fromX < COLS && fromY < ROWS) {
+        this.grid[fromY][fromX] = this.staticGrid[fromY][fromX];
+      }
+      
+      // Set new position
+      if (toX >= 0 && toY >= 0 && toX < COLS && toY < ROWS) {
+        this.grid[toY][toX] = entityType;
+      }
+    }
+
+    collectItem(x, y) {
+      if (x < 0 || y < 0 || x >= COLS || y >= ROWS) return null;
+      
+      const item = this.staticGrid[y][x];
+      if (item === DOT || item === POWER) {
+        this.staticGrid[y][x] = EMPTY;
+        return item;
+      }
+      return null;
+    }
+
+    // BFS pathfinding algorithm
+    findPath(startX, startY, targetX, targetY) {
+      if (!this.isValidMove(startX, startY) || !this.isValidMove(targetX, targetY)) {
+        return null;
+      }
+
+      const queue = [{x: startX, y: startY, path: []}];
+      const visited = new Set();
+      visited.add(`${startX},${startY}`);
+
+      const directions = [
+        {x: 0, y: -1}, // up
+        {x: 1, y: 0},  // right
+        {x: 0, y: 1},  // down
+        {x: -1, y: 0}  // left
+      ];
+
+      while (queue.length > 0) {
+        const current = queue.shift();
+        
+        // Found target
+        if (current.x === targetX && current.y === targetY) {
+          return current.path;
+        }
+
+        // Explore neighbors
+        for (const dir of directions) {
+          const newX = current.x + dir.x;
+          const newY = current.y + dir.y;
+          const key = `${newX},${newY}`;
+
+          if (!visited.has(key) && this.isValidMove(newX, newY)) {
+            visited.add(key);
+            queue.push({
+              x: newX,
+              y: newY,
+              path: [...current.path, dir]
+            });
+          }
+        }
+      }
+
+      return null; // No path found
+    }
+
+    getCell(x, y) {
+      if (x < 0 || y < 0 || x >= COLS || y >= ROWS) return WALL;
+      return this.grid[y][x];
+    }
+
+    getStaticCell(x, y) {
+      if (x < 0 || y < 0 || x >= COLS || y >= ROWS) return WALL;
+      return this.staticGrid[y][x];
+    }
+  }
+
+  // Initialize game grid
+  const gameGrid = new GameGrid();
+
   // Particle system
   class Particle {
     constructor(x, y, color, velocity) {
@@ -110,52 +258,6 @@
     }
   }
 
-  // Initialize grid
-  const grid = [];
-  function initGrid() {
-    game.dotsRemaining = 0;
-    for (let y = 0; y < ROWS; y++) {
-      grid[y] = [];
-      for (let x = 0; x < COLS; x++) {
-        const char = MAZE[y][x];
-        switch (char) {
-          case '#': 
-            grid[y][x] = WALL; 
-            break;
-          case '.': 
-            grid[y][x] = DOT; 
-            game.dotsRemaining++; 
-            break;
-          case 'o': 
-            grid[y][x] = POWER; 
-            game.dotsRemaining++; 
-            break;
-          default: 
-            grid[y][x] = EMPTY; 
-            break;
-        }
-      }
-    }
-  }
-
-  // Helper functions
-  function isValidPosition(x, y) {
-    return x >= 0 && y >= 0 && x < COLS && y < ROWS && grid[y][x] !== WALL;
-  }
-
-  function getTileCenter(tileX, tileY) {
-    return {
-      x: tileX * TILE + TILE / 2,
-      y: tileY * TILE + TILE / 2
-    };
-  }
-
-  function getDistance(pos1, pos2) {
-    const dx = pos1.x - pos2.x;
-    const dy = pos1.y - pos2.y;
-    return Math.sqrt(dx * dx + dy * dy);
-  }
-
   function createParticles(x, y, color, count = 6) {
     for (let i = 0; i < count; i++) {
       const angle = (Math.PI * 2 * i) / count;
@@ -168,27 +270,31 @@
     }
   }
 
-  // Simple, reliable Pac-Man class
+  // Grid-based Pac-Man class
   class PacMan {
     constructor() {
       this.reset();
       this.mouthAngle = 0;
       this.animSpeed = 8;
+      this.moveTimer = 0;
+      this.moveInterval = 1000 / PACMAN_SPEED; // milliseconds per move
     }
 
     reset() {
-      this.tileX = 9;
-      this.tileY = 15;
-      const center = getTileCenter(this.tileX, this.tileY);
-      this.x = center.x;
-      this.y = center.y;
-      this.direction = { x: 0, y: 0 };
-      this.nextDirection = { x: 0, y: 0 };
-      this.speed = PACMAN_SPEED * TILE;
+      this.gridX = 9;
+      this.gridY = 15;
+      this.pixelX = this.gridX * TILE + TILE / 2;
+      this.pixelY = this.gridY * TILE + TILE / 2;
+      this.direction = {x: 0, y: 0};
+      this.nextDirection = {x: 0, y: 0};
+      this.moveTimer = 0;
+      
+      // Place in grid
+      gameGrid.moveEntity(-1, -1, this.gridX, this.gridY, PACMAN);
     }
 
     setDirection(dx, dy) {
-      this.nextDirection = { x: dx, y: dy };
+      this.nextDirection = {x: dx, y: dy};
     }
 
     update(deltaTime) {
@@ -198,66 +304,69 @@
       this.mouthAngle += this.animSpeed * deltaTime;
       if (this.mouthAngle > Math.PI * 2) this.mouthAngle = 0;
 
-      // Check if we can change direction
-      const nextTileX = this.tileX + this.nextDirection.x;
-      const nextTileY = this.tileY + this.nextDirection.y;
-      
-      if (this.nextDirection.x !== 0 || this.nextDirection.y !== 0) {
-        if (isValidPosition(nextTileX, nextTileY)) {
-          this.direction = { ...this.nextDirection };
-          this.nextDirection = { x: 0, y: 0 };
+      // Update move timer
+      this.moveTimer += deltaTime * 1000;
+
+      if (this.moveTimer >= this.moveInterval) {
+        this.moveTimer = 0;
+
+        // Try to change direction if requested
+        if (this.nextDirection.x !== 0 || this.nextDirection.y !== 0) {
+          const nextX = this.gridX + this.nextDirection.x;
+          const nextY = this.gridY + this.nextDirection.y;
+          
+          if (gameGrid.isValidMove(nextX, nextY, PACMAN)) {
+            this.direction = {...this.nextDirection};
+            this.nextDirection = {x: 0, y: 0};
+          }
         }
-      }
 
-      // Move Pac-Man
-      const newX = this.x + this.direction.x * this.speed * deltaTime;
-      const newY = this.y + this.direction.y * this.speed * deltaTime;
-      
-      const newTileX = Math.floor(newX / TILE);
-      const newTileY = Math.floor(newY / TILE);
+        // Move in current direction
+        if (this.direction.x !== 0 || this.direction.y !== 0) {
+          const newX = this.gridX + this.direction.x;
+          const newY = this.gridY + this.direction.y;
 
-      // Check if new position is valid
-      if (isValidPosition(newTileX, newTileY)) {
-        this.x = newX;
-        this.y = newY;
-        this.tileX = newTileX;
-        this.tileY = newTileY;
-      } else {
-        // Stop at wall
-        this.direction = { x: 0, y: 0 };
-      }
+          // Handle tunnel wrap-around
+          let finalX = newX;
+          if (newX < 0) finalX = COLS - 1;
+          else if (newX >= COLS) finalX = 0;
 
-      // Tunnel wrap-around
-      if (this.x < 0) {
-        this.x = canvas.width;
-        this.tileX = COLS - 1;
-      } else if (this.x > canvas.width) {
-        this.x = 0;
-        this.tileX = 0;
-      }
+          if (gameGrid.isValidMove(finalX, newY, PACMAN)) {
+            // Move entity in grid
+            gameGrid.moveEntity(this.gridX, this.gridY, finalX, newY, PACMAN);
+            
+            // Check for collectibles
+            const collected = gameGrid.collectItem(finalX, newY);
+            if (collected === DOT) {
+              game.score += 10;
+              game.dotsRemaining--;
+              createParticles(finalX * TILE + TILE/2, newY * TILE + TILE/2, '#FFFF00', 4);
+              playEatSound();
+              
+              if (game.dotsRemaining <= 0) {
+                nextLevel();
+              }
+            } else if (collected === POWER) {
+              game.score += 50;
+              game.dotsRemaining--;
+              createParticles(finalX * TILE + TILE/2, newY * TILE + TILE/2, '#FFB8FF', 8);
+              activateFrightenedMode();
+              playPowerSound();
+              
+              if (game.dotsRemaining <= 0) {
+                nextLevel();
+              }
+            }
 
-      // Eat dots and power pellets
-      const currentTile = grid[this.tileY] && grid[this.tileY][this.tileX];
-      if (currentTile === DOT) {
-        grid[this.tileY][this.tileX] = EMPTY;
-        game.score += 10;
-        game.dotsRemaining--;
-        createParticles(this.x, this.y, '#FFFF00', 4);
-        playEatSound();
-        
-        if (game.dotsRemaining <= 0) {
-          nextLevel();
-        }
-      } else if (currentTile === POWER) {
-        grid[this.tileY][this.tileX] = EMPTY;
-        game.score += 50;
-        game.dotsRemaining--;
-        createParticles(this.x, this.y, '#FFB8FF', 8);
-        activateFrightenedMode();
-        playPowerSound();
-        
-        if (game.dotsRemaining <= 0) {
-          nextLevel();
+            // Update position
+            this.gridX = finalX;
+            this.gridY = newY;
+            this.pixelX = this.gridX * TILE + TILE / 2;
+            this.pixelY = this.gridY * TILE + TILE / 2;
+          } else {
+            // Can't move, stop
+            this.direction = {x: 0, y: 0};
+          }
         }
       }
     }
@@ -266,7 +375,7 @@
       const radius = TILE * 0.35;
       
       ctx.save();
-      ctx.translate(this.x, this.y);
+      ctx.translate(this.pixelX, this.pixelY);
       
       // Rotate based on direction
       let angle = 0;
@@ -304,46 +413,37 @@
     }
   }
 
-  // Simple Ghost class
+  // Grid-based Ghost class with BFS pathfinding
   class Ghost {
-    constructor(name, color, startX, startY) {
+    constructor(name, color, startX, startY, entityType) {
       this.name = name;
       this.color = color;
       this.originalColor = color;
-      this.startTileX = startX;
-      this.startTileY = startY;
+      this.startGridX = startX;
+      this.startGridY = startY;
+      this.entityType = entityType;
       this.reset();
-      this.lastDirection = { x: 0, y: 1 };
+      this.pathfindingTimer = 0;
+      this.pathfindingInterval = 500; // Recalculate path every 500ms
+      this.currentPath = [];
     }
 
     reset() {
-      // Ensure ghosts spawn in valid positions only
-      this.tileX = this.startTileX;
-      this.tileY = this.startTileY;
-      
-      // Make sure spawn position is valid
-      if (!isValidPosition(this.tileX, this.tileY)) {
-        // Find nearest valid position
-        for (let dy = -2; dy <= 2; dy++) {
-          for (let dx = -2; dx <= 2; dx++) {
-            if (isValidPosition(this.startTileX + dx, this.startTileY + dy)) {
-              this.tileX = this.startTileX + dx;
-              this.tileY = this.startTileY + dy;
-              break;
-            }
-          }
-        }
-      }
-      
-      const center = getTileCenter(this.tileX, this.tileY);
-      this.x = center.x;
-      this.y = center.y;
-      this.direction = { x: 0, y: 0 };
-      this.speed = GHOST_SPEED * TILE;
+      this.gridX = this.startGridX;
+      this.gridY = this.startGridY;
+      this.pixelX = this.gridX * TILE + TILE / 2;
+      this.pixelY = this.gridY * TILE + TILE / 2;
+      this.direction = {x: 0, y: 0};
       this.frightened = false;
       this.frightenedTimer = 0;
-      this.mode = 'chase';
       this.spawnTimer = 1000;
+      this.moveTimer = 0;
+      this.moveInterval = 1000 / GHOST_SPEED;
+      this.pathfindingTimer = 0;
+      this.currentPath = [];
+      
+      // Place in grid
+      gameGrid.moveEntity(-1, -1, this.gridX, this.gridY, this.entityType);
     }
 
     update(deltaTime, pacman) {
@@ -360,86 +460,91 @@
         this.frightenedTimer -= deltaTime * 1000;
         if (this.frightenedTimer <= 0) {
           this.frightened = false;
-          this.speed = GHOST_SPEED * TILE;
+          this.moveInterval = 1000 / GHOST_SPEED;
           this.color = this.originalColor;
         }
       }
 
-      // Simple AI
-      const directions = [
-        { x: 0, y: -1 }, // up
-        { x: 1, y: 0 },  // right
-        { x: 0, y: 1 },  // down
-        { x: -1, y: 0 }  // left
-      ];
+      // Update pathfinding timer
+      this.pathfindingTimer += deltaTime * 1000;
+      if (this.pathfindingTimer >= this.pathfindingInterval) {
+        this.pathfindingTimer = 0;
+        this.calculatePath(pacman);
+      }
 
-      // Filter valid directions
-      const validDirs = directions.filter(dir => {
-        const newX = this.tileX + dir.x;
-        const newY = this.tileY + dir.y;
-        const isReverse = dir.x === -this.lastDirection.x && dir.y === -this.lastDirection.y;
-        return isValidPosition(newX, newY) && !isReverse;
-      });
+      // Update move timer
+      this.moveTimer += deltaTime * 1000;
 
-      if (validDirs.length === 0) {
-        // Allow reverse if no other options
-        const reverseDirs = directions.filter(dir => {
-          const newX = this.tileX + dir.x;
-          const newY = this.tileY + dir.y;
-          return isValidPosition(newX, newY);
+      if (this.moveTimer >= this.moveInterval) {
+        this.moveTimer = 0;
+        this.makeMove();
+      }
+    }
+
+    calculatePath(pacman) {
+      if (this.frightened) {
+        // When frightened, move randomly
+        const directions = [
+          {x: 0, y: -1}, {x: 1, y: 0}, {x: 0, y: 1}, {x: -1, y: 0}
+        ];
+        const validDirs = directions.filter(dir => {
+          const newX = this.gridX + dir.x;
+          const newY = this.gridY + dir.y;
+          return gameGrid.isValidMove(newX, newY, this.entityType);
         });
-        if (reverseDirs.length > 0) {
-          this.direction = reverseDirs[0];
+        
+        if (validDirs.length > 0) {
+          this.direction = validDirs[Math.floor(Math.random() * validDirs.length)];
         }
       } else {
-        // Choose direction based on mode
-        let targetDir;
-        if (this.frightened) {
-          // Run away from Pac-Man
-          const distances = validDirs.map(dir => {
-            const newX = this.tileX + dir.x;
-            const newY = this.tileY + dir.y;
-            return getDistance({ x: newX, y: newY }, { x: pacman.tileX, y: pacman.tileY });
-          });
-          const maxDistIndex = distances.indexOf(Math.max(...distances));
-          targetDir = validDirs[maxDistIndex];
+        // Use BFS to find path to Pac-Man
+        const path = gameGrid.findPath(this.gridX, this.gridY, pacman.gridX, pacman.gridY);
+        if (path && path.length > 0) {
+          this.currentPath = path;
+          this.direction = path[0];
         } else {
-          // Chase Pac-Man
-          const distances = validDirs.map(dir => {
-            const newX = this.tileX + dir.x;
-            const newY = this.tileY + dir.y;
-            return getDistance({ x: newX, y: newY }, { x: pacman.tileX, y: pacman.tileY });
+          // No path found, move randomly
+          const directions = [
+            {x: 0, y: -1}, {x: 1, y: 0}, {x: 0, y: 1}, {x: -1, y: 0}
+          ];
+          const validDirs = directions.filter(dir => {
+            const newX = this.gridX + dir.x;
+            const newY = this.gridY + dir.y;
+            return gameGrid.isValidMove(newX, newY, this.entityType);
           });
-          const minDistIndex = distances.indexOf(Math.min(...distances));
-          targetDir = validDirs[minDistIndex];
+          
+          if (validDirs.length > 0) {
+            this.direction = validDirs[Math.floor(Math.random() * validDirs.length)];
+          }
         }
-        this.direction = targetDir;
       }
+    }
 
-      this.lastDirection = { ...this.direction };
+    makeMove() {
+      if (this.direction.x === 0 && this.direction.y === 0) return;
 
-      // Move ghost
-      const newX = this.x + this.direction.x * this.speed * deltaTime;
-      const newY = this.y + this.direction.y * this.speed * deltaTime;
-      
-      const newTileX = Math.floor(newX / TILE);
-      const newTileY = Math.floor(newY / TILE);
+      const newX = this.gridX + this.direction.x;
+      const newY = this.gridY + this.direction.y;
 
-      // Only move if position is valid
-      if (isValidPosition(newTileX, newTileY)) {
-        this.x = newX;
-        this.y = newY;
-        this.tileX = newTileX;
-        this.tileY = newTileY;
-      }
+      // Handle tunnel wrap-around
+      let finalX = newX;
+      if (newX < 0) finalX = COLS - 1;
+      else if (newX >= COLS) finalX = 0;
 
-      // Tunnel wrap-around
-      if (this.x < 0) {
-        this.x = canvas.width;
-        this.tileX = COLS - 1;
-      } else if (this.x > canvas.width) {
-        this.x = 0;
-        this.tileX = 0;
+      if (gameGrid.isValidMove(finalX, newY, this.entityType)) {
+        // Move entity in grid
+        gameGrid.moveEntity(this.gridX, this.gridY, finalX, newY, this.entityType);
+        
+        // Update position
+        this.gridX = finalX;
+        this.gridY = newY;
+        this.pixelX = this.gridX * TILE + TILE / 2;
+        this.pixelY = this.gridY * TILE + TILE / 2;
+
+        // Remove first step from current path
+        if (this.currentPath.length > 0) {
+          this.currentPath.shift();
+        }
       }
     }
 
@@ -449,7 +554,7 @@
       const radius = TILE * 0.35;
       
       ctx.save();
-      ctx.translate(this.x, this.y);
+      ctx.translate(this.pixelX, this.pixelY);
 
       // Glow effect
       ctx.shadowColor = this.frightened ? '#0000FF' : this.originalColor;
@@ -553,15 +658,14 @@
 
   // Initialize game
   function initGame() {
-    initGrid();
+    gameGrid.initialize();
     pacman = new PacMan();
     
-    // Place ghosts in safe positions
     ghosts = [
-      new Ghost('blinky', '#FF0000', 9, 9),   // Red
-      new Ghost('pinky', '#FFB8FF', 8, 10),   // Pink  
-      new Ghost('inky', '#00FFFF', 10, 10),   // Cyan
-      new Ghost('clyde', '#FFB852', 9, 11)    // Orange
+      new Ghost('blinky', '#FF0000', 9, 9, GHOST_1),
+      new Ghost('pinky', '#FFB8FF', 8, 10, GHOST_2),
+      new Ghost('inky', '#00FFFF', 10, 10, GHOST_3),
+      new Ghost('clyde', '#FFB852', 9, 11, GHOST_4)
     ];
     
     // Stagger spawn times
@@ -574,7 +678,7 @@
 
   // Reset level
   function resetLevel() {
-    initGrid();
+    gameGrid.initialize();
     pacman.reset();
     ghosts.forEach(ghost => ghost.reset());
     game.frightenedMode = false;
@@ -591,13 +695,8 @@
       if (ghost.spawnTimer <= 0) {
         ghost.frightened = true;
         ghost.frightenedTimer = FRIGHTENED_TIME;
-        ghost.speed = FRIGHTENED_SPEED * TILE;
+        ghost.moveInterval = 1000 / FRIGHTENED_SPEED;
         ghost.color = '#0000FF';
-        // Reverse direction
-        ghost.direction.x *= -1;
-        ghost.direction.y *= -1;
-        ghost.lastDirection.x *= -1;
-        ghost.lastDirection.y *= -1;
       }
     });
   }
@@ -606,12 +705,12 @@
     ghosts.forEach(ghost => {
       if (ghost.spawnTimer > 0) return;
       
-      const distance = getDistance(pacman, ghost);
-      if (distance < TILE * 0.6) {
+      // Grid-based collision detection
+      if (ghost.gridX === pacman.gridX && ghost.gridY === pacman.gridY) {
         if (ghost.frightened) {
           // Eat ghost
           game.score += 200;
-          createParticles(ghost.x, ghost.y, ghost.originalColor, 10);
+          createParticles(ghost.pixelX, ghost.pixelY, ghost.originalColor, 10);
           ghost.reset();
           ghost.spawnTimer = 5000;
           playPowerSound();
@@ -625,7 +724,7 @@
 
   function loseLife() {
     game.lives--;
-    createParticles(pacman.x, pacman.y, '#FFFF00', 15);
+    createParticles(pacman.pixelX, pacman.pixelY, '#FFFF00', 15);
     playDeathSound();
     
     if (game.lives <= 0) {
@@ -649,7 +748,7 @@
     playLevelSound();
     
     ghosts.forEach(ghost => {
-      ghost.speed *= 1.1;
+      ghost.moveInterval *= 0.9; // 10% faster
     });
     
     resetLevel();
@@ -678,7 +777,7 @@
     updateHUD();
   }
 
-  // Drawing functions
+  // Grid-aligned drawing functions
   function drawMaze() {
     // Gradient background
     const gradient = ctx.createRadialGradient(
@@ -690,10 +789,10 @@
     ctx.fillStyle = gradient;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    // Draw maze
+    // Draw maze based on static grid
     for (let y = 0; y < ROWS; y++) {
       for (let x = 0; x < COLS; x++) {
-        const tileType = grid[y][x];
+        const tileType = gameGrid.getStaticCell(x, y);
         const pixelX = x * TILE;
         const pixelY = y * TILE;
 
@@ -968,5 +1067,5 @@
   canvas.focus();
   canvas.addEventListener('contextmenu', e => e.preventDefault());
   
-  console.log('Pac-Man Ready for Pixel 8! 📱🎮');
+  console.log('Grid-Based Pac-Man with BFS Pathfinding Ready! 🎮🧠');
 })();
