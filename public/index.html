@@ -3,20 +3,21 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
-    <meta name="theme-color" content="#000000" />
+    <meta name="theme-color" content="#0a0a1a" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-    <title>Pac‑Man JS</title>
+    <title>PAC-MAN | Modern Arcade</title>
     <link rel="stylesheet" href="./styles.css" />
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='40' fill='%23FFD700' /><path d='M 50 50 L 90 30 A 40 40 0 0 1 90 70 Z' fill='%230a0a1a' /></svg>">
   </head>
   <body>
     <div id="hud">
-      <div class="brand">PAC‑MAN</div>
+      <div class="brand">PAC-MAN</div>
       <div class="stats">
-        <span id="score">0</span>
-        <span id="lives"></span>
-        <span id="level">1</span>
+        <span id="score" title="Score">000000</span>
+        <span id="lives" title="Lives">🟡🟡🟡</span>
+        <span id="level" title="Level">1</span>
       </div>
     </div>
 
@@ -24,10 +25,11 @@
 
     <div id="overlay" class="overlay show">
       <div class="panel">
-        <h1>Pac‑Man</h1>
-        <p>🟡 Collect all dots to advance levels!</p>
-        <p>👻 Avoid ghosts or eat power pellets to chase them!</p>
-        <p>🎮 Use arrow keys, WASD, or touch controls</p>
+        <h1>PAC-MAN</h1>
+        <p>🟡 Collect all dots and build combos!</p>
+        <p>👻 Eat power pellets to chase ghosts!</p>
+        <p>🍒 Grab bonus fruits for extra points!</p>
+        <p>🎮 Arrow keys, WASD, or touch controls</p>
         <p id="highScoreDisplay">🏆 High Score: <span id="highScoreValue">0</span></p>
         <button id="startBtn">Start Game</button>
       </div>
