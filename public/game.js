@@ -114,7 +114,7 @@
         }
       }
 
-      // Move
+      // Move with simple alignment
       const newX = this.x + this.direction.x * this.speed * deltaTime;
       const newY = this.y + this.direction.y * this.speed * deltaTime;
       
@@ -122,11 +122,38 @@
       const newTileY = Math.floor(newY / TILE);
 
       if (isValidPosition(newTileX, newTileY)) {
-        this.x = newX;
-        this.y = newY;
+        // Simple corridor centering - basic math only
+        const tileCenterX = newTileX * TILE + TILE / 2;
+        const tileCenterY = newTileY * TILE + TILE / 2;
+        
+        // Keep within 40% of tile center - simple bounds
+        const maxOffset = TILE * 0.4;
+        const offsetX = newX - tileCenterX;
+        const offsetY = newY - tileCenterY;
+        
+        // Basic clamping
+        if (offsetX > maxOffset) {
+          this.x = tileCenterX + maxOffset;
+        } else if (offsetX < -maxOffset) {
+          this.x = tileCenterX - maxOffset;
+        } else {
+          this.x = newX;
+        }
+        
+        if (offsetY > maxOffset) {
+          this.y = tileCenterY + maxOffset;
+        } else if (offsetY < -maxOffset) {
+          this.y = tileCenterY - maxOffset;
+        } else {
+          this.y = newY;
+        }
+        
         this.tileX = newTileX;
         this.tileY = newTileY;
       } else {
+        // Hit wall - snap to center
+        this.x = this.tileX * TILE + TILE / 2;
+        this.y = this.tileY * TILE + TILE / 2;
         this.direction = { x: 0, y: 0 };
       }
 
@@ -242,7 +269,7 @@
         }
       }
 
-      // Move
+      // Move with simple alignment
       const newX = this.x + this.direction.x * this.speed * deltaTime;
       const newY = this.y + this.direction.y * this.speed * deltaTime;
       
@@ -250,10 +277,38 @@
       const newTileY = Math.floor(newY / TILE);
 
       if (isValidPosition(newTileX, newTileY)) {
-        this.x = newX;
-        this.y = newY;
+        // Simple corridor centering - basic math only
+        const tileCenterX = newTileX * TILE + TILE / 2;
+        const tileCenterY = newTileY * TILE + TILE / 2;
+        
+        // Keep within 40% of tile center - simple bounds
+        const maxOffset = TILE * 0.4;
+        const offsetX = newX - tileCenterX;
+        const offsetY = newY - tileCenterY;
+        
+        // Basic clamping
+        if (offsetX > maxOffset) {
+          this.x = tileCenterX + maxOffset;
+        } else if (offsetX < -maxOffset) {
+          this.x = tileCenterX - maxOffset;
+        } else {
+          this.x = newX;
+        }
+        
+        if (offsetY > maxOffset) {
+          this.y = tileCenterY + maxOffset;
+        } else if (offsetY < -maxOffset) {
+          this.y = tileCenterY - maxOffset;
+        } else {
+          this.y = newY;
+        }
+        
         this.tileX = newTileX;
         this.tileY = newTileY;
+      } else {
+        // Hit wall - snap to center
+        this.x = this.tileX * TILE + TILE / 2;
+        this.y = this.tileY * TILE + TILE / 2;
       }
 
       // Wrap
