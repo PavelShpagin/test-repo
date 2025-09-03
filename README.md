@@ -1,107 +1,163 @@
-# 🎮 Classic Pacman Game
+# 🎮 Pacman JavaScript Game
 
-A pixel-perfect, bug-free implementation of the classic Pacman arcade game with modern web technologies. Optimized for all devices including Pixel 8.
+A fully functional Pacman game built with vanilla JavaScript, featuring advanced ghost AI, sound effects, level progression, and mobile support.
 
-## 🎯 Features
+## 🚀 How to Run the App
 
-### Classic Gameplay
-- **Authentic Pacman mechanics** - Smooth movement, responsive controls
-- **Four unique ghosts** with classic AI behaviors:
-  - **Blinky (Red)** - Directly chases Pacman
-  - **Pinky (Pink)** - Ambushes by targeting ahead of Pacman
-  - **Inky (Cyan)** - Complex targeting using Blinky's position
-  - **Clyde (Orange)** - Switches between chase and scatter based on distance
-- **Power pellets** - Turn the tables on ghosts for limited time
-- **Progressive difficulty** - Ghosts get smarter as you advance
-- **Score system** - Classic scoring with bonus points for eating ghosts
+### Quick Start
 
-### Modern UI/UX
-- **Clean, pixel-perfect design** - Retro aesthetics with modern polish
-- **Responsive layout** - Works perfectly on all screen sizes
-- **Touch controls** - Optimized for mobile devices
-- **Keyboard support** - Arrow keys or WASD for desktop play
-- **Visual feedback** - Smooth animations and effects
-- **Sound effects** - Retro-style audio using Web Audio API
+1. **Install dependencies:**
+   ```bash
+   npm install
+   ```
 
-### Technical Excellence
-- **Bug-free implementation** - Thoroughly tested game logic
-- **60 FPS performance** - Smooth gameplay on all devices
-- **Pixel 8 optimized** - Perfect sizing and touch targets
-- **Local high score** - Persistent score tracking
-- **Pause functionality** - Take breaks without losing progress
-- **Sound toggle** - Mute option for quiet play
+2. **Start the game server:**
+   ```bash
+   npm start
+   ```
+   The game will automatically open in your browser at `http://localhost:8080`
 
-## 🎮 How to Play
+### Development Mode with Auto-Reload
 
-### Controls
-**Desktop:**
-- Arrow Keys or WASD - Move Pacman
-- Space - Pause game
+For development with automatic server reload on file changes:
 
-**Mobile:**
-- Touch directional buttons to move
-- Tap PAUSE button to pause
-- Tap SOUND button to toggle audio
+```bash
+npm run dev
+```
 
-### Rules
-1. **Eat all dots** to complete each level
-2. **Avoid ghosts** - Touching them costs a life
-3. **Power pellets** make ghosts vulnerable
-4. **Eat blue ghosts** for bonus points (200, 400, 800, 1600)
-5. **3 lives** to achieve the highest score possible
+This uses `nodemon` to watch for changes in `.js`, `.html`, and `.css` files and automatically restarts the server.
 
-### Ghost Behaviors
-- **Scatter Mode**: Ghosts patrol their corners
-- **Chase Mode**: Each ghost uses unique AI to hunt Pacman
-- **Frightened Mode**: Ghosts flee randomly when power pellet is active
-- **Eaten Mode**: Ghost eyes return quickly to the ghost house
+For verbose logging during development:
+```bash
+npm run dev:verbose
+```
 
-## 🚀 Quick Start
+## 🎮 Game Features
 
-1. Open `index.html` in any modern web browser
-2. Click "START GAME" to begin
-3. Use controls to navigate the maze
-4. Eat all dots while avoiding ghosts
-5. Achieve the highest score!
+### Core Gameplay
+- **Classic Pacman mechanics** - Eat all dots to complete levels
+- **Power pellets** - Turn the tables on ghosts and eat them for bonus points
+- **Fruit bonuses** - Appear at certain points for extra score
+- **Level progression** - Difficulty increases with each level
+- **High score tracking** - Persistent high scores using localStorage
 
-## 📱 Mobile Optimization
+### Advanced Ghost AI
+Each ghost has unique personality and behavior:
+- **Blinky (Red)** - Directly chases Pacman
+- **Pinky (Pink)** - Tries to ambush by targeting ahead of Pacman
+- **Inky (Cyan)** - Unpredictable movement patterns
+- **Clyde (Orange)** - Shy, keeps distance when too close
 
-The game is fully optimized for mobile devices with:
-- Touch-friendly button controls
-- Responsive canvas sizing
-- Prevented zoom and scroll issues
-- Optimized for Pixel 8 dimensions (412x915)
-- Consistent button sizes for comfortable play
+### Visual & Audio Effects
+- **Sound effects** using Web Audio API
+  - Dot eating sounds
+  - Power-up activation
+  - Ghost eating
+  - Death sound
+  - Level completion fanfare
+- **Particle effects** for visual feedback
+- **Score popups** when eating ghosts or fruit
+- **Smooth animations** with pulsing dots and power pellets
+- **Ghost animations** with wavy movement and eyes that follow Pacman
 
-## 🎨 Features Implemented
+### Game States
+- **Ready** - Press any arrow key to start
+- **Playing** - Active gameplay
+- **Dying** - Death animation
+- **Level Complete** - Transition between levels
+- **Game Over** - Final score display
 
-✅ Classic maze layout with tunnels  
-✅ Smooth Pacman movement and animation  
-✅ Four ghosts with unique AI behaviors  
-✅ Power pellet mechanics  
-✅ Score and high score tracking  
-✅ Lives system  
-✅ Progressive difficulty  
-✅ Sound effects  
-✅ Pause functionality  
-✅ Game over and restart  
-✅ Mobile-responsive design  
-✅ Touch controls  
-✅ Keyboard controls  
-✅ Visual polish and effects  
+## 🕹️ Controls
 
-## 🛠️ Technical Stack
+### Keyboard Controls
+- **Arrow Keys** or **WASD** - Move Pacman
+- **Space** or **P** - Pause/Resume game
 
-- **HTML5 Canvas** - Hardware-accelerated graphics
-- **Vanilla JavaScript** - No dependencies, pure performance
-- **CSS3** - Modern styling with animations
-- **Web Audio API** - Dynamic sound generation
-- **LocalStorage** - Persistent high score
+### Mobile Controls
+- Touch-friendly on-screen directional buttons
+- Pause button for game control
+- Responsive design for all screen sizes
 
-## 📄 License
+## 📱 Mobile Support
 
-This is a recreation of the classic Pacman game for educational purposes. Pacman is a trademark of Bandai Namco Entertainment Inc.
+The game is fully responsive and works on mobile devices:
+- Touch controls automatically appear on mobile
+- Prevents accidental zooming and scrolling
+- Optimized canvas scaling for different screen sizes
 
----
+## 🏆 Scoring System
 
-**Enjoy the game! 👻🟡**
+- **Dot**: 10 points
+- **Power Pellet**: 50 points
+- **Ghost** (when powered up):
+  - 1st ghost: 200 points
+  - 2nd ghost: 400 points
+  - 3rd ghost: 800 points
+  - 4th ghost: 1600 points
+- **Fruit Bonuses** (varies by level):
+  - Cherry: 100 points
+  - Strawberry: 300 points
+  - Orange: 500 points
+  - Apple: 700 points
+  - Melon: 1000 points
+- **Level Completion**: 1000 × level number
+- **Extra Life**: Every 10,000 points
+
+## 🔧 Technical Details
+
+### Technologies Used
+- **Pure JavaScript** - No frameworks or libraries
+- **HTML5 Canvas** - For game rendering
+- **Web Audio API** - For sound effects
+- **LocalStorage** - For high score persistence
+
+### File Structure
+```
+/workspace/
+├── index.html           # Game UI and layout
+├── pacman-improved.js   # Enhanced game logic with all features
+├── pacman.js           # Original simpler version
+├── server.js           # Node.js server
+├── package.json        # Project dependencies and scripts
+└── README.md          # This file
+```
+
+### Browser Compatibility
+- Works in all modern browsers (Chrome, Firefox, Safari, Edge)
+- Requires JavaScript enabled
+- Web Audio API support recommended for sound effects
+
+## 🎯 Tips for Playing
+
+1. **Learn ghost patterns** - Each ghost behaves differently
+2. **Use power pellets strategically** - Save them for when ghosts are clustered
+3. **Chain ghost eating** - Eat multiple ghosts during one power-up for maximum points
+4. **Watch for fruit** - They appear twice per level at specific dot counts
+5. **Corner turns** - Pre-turn by pressing the direction before reaching the corner
+6. **Use the tunnels** - Side tunnels let you wrap around the maze
+
+## 🔄 Development Notes
+
+### Auto-Reload Setup
+The project uses `nodemon` for automatic server restart during development. When you run `npm run dev`, the server will:
+- Watch all `.js`, `.html`, and `.css` files
+- Automatically restart when changes are detected
+- Preserve the port (8080 by default)
+
+### Customization
+You can easily customize the game by modifying `pacman-improved.js`:
+- Adjust `gameSpeed` for overall game speed
+- Modify ghost `speed` values for difficulty
+- Change colors in the `ghosts` array
+- Adjust scoring values
+- Modify map layout in `initializeMap()`
+
+## 📝 License
+
+MIT License - Feel free to use and modify for your own projects!
+
+## 🎉 Have Fun!
+
+Enjoy playing this classic arcade game recreation! Try to beat your high score and reach higher levels. The difficulty increases with each level, making it progressively more challenging.
+
+**Pro tip**: The game saves your high score locally, so you can always come back and try to beat it!
