@@ -146,31 +146,53 @@ class MobilePacman {
     }
     
     setupCanvas() {
-        // Set canvas size
+        // Set base canvas size
         this.canvas.width = this.gridSize * this.cellSize;
         this.canvas.height = this.map.length * this.cellSize;
+        
+        // Disable image smoothing for crisp pixels
+        this.ctx.imageSmoothingEnabled = false;
+        this.ctx.webkitImageSmoothingEnabled = false;
+        this.ctx.mozImageSmoothingEnabled = false;
+        this.ctx.msImageSmoothingEnabled = false;
         
         // Scale canvas for mobile
         this.scaleCanvas();
         
-        // Handle resize
-        window.addEventListener('resize', () => this.scaleCanvas());
+        // Handle resize with debouncing
+        let resizeTimeout;
+        window.addEventListener('resize', () => {
+            clearTimeout(resizeTimeout);
+            resizeTimeout = setTimeout(() => this.scaleCanvas(), 100);
+        });
+        
+        // Handle orientation change
+        window.addEventListener('orientationchange', () => {
+            setTimeout(() => this.scaleCanvas(), 200);
+        });
     }
     
     scaleCanvas() {
-        const container = document.getElementById('canvasWrapper');
-        const maxWidth = container.clientWidth - 20;
-        const maxHeight = container.clientHeight - 20;
+        const container = document.querySelector('.canvas-container');
+        if (!container) return;
         
-        const scaleX = maxWidth / this.canvas.width;
-        const scaleY = maxHeight / this.canvas.height;
-        const scale = Math.min(scaleX, scaleY, 2); // Max scale of 2x
+        const containerWidth = container.clientWidth;
+        const containerHeight = container.clientHeight;
         
+        // Calculate scale to fit container while maintaining aspect ratio
+        const scaleX = containerWidth / this.canvas.width;
+        const scaleY = containerHeight / this.canvas.height;
+        const scale = Math.min(scaleX, scaleY) * 0.95; // 95% to add some padding
+        
+        // Apply scale using CSS transform for better performance
         this.canvas.style.width = `${this.canvas.width * scale}px`;
         this.canvas.style.height = `${this.canvas.height * scale}px`;
         
-        // Enable image smoothing for better visuals
-        this.ctx.imageSmoothingEnabled = false;
+        // Center the canvas
+        this.canvas.style.position = 'absolute';
+        this.canvas.style.left = '50%';
+        this.canvas.style.top = '50%';
+        this.canvas.style.transform = 'translate(-50%, -50%)';
     }
     
     setupControls() {
@@ -200,15 +222,26 @@ class MobilePacman {
                 // Touch events for better mobile response
                 btn.addEventListener('touchstart', (e) => {
                     e.preventDefault();
+                    e.stopPropagation();
                     if (this.gameState === 'playing') {
                         this.pacman.nextDirection = direction;
                         btn.classList.add('pressed');
+                        // Haptic feedback if available
+                        if (navigator.vibrate) {
+                            navigator.vibrate(10);
+                        }
                     }
-                });
+                }, { passive: false });
                 
                 btn.addEventListener('touchend', (e) => {
                     e.preventDefault();
+                    e.stopPropagation();
                     btn.classList.remove('pressed');
+                }, { passive: false });
+                
+                // Prevent context menu on long press
+                btn.addEventListener('contextmenu', (e) => {
+                    e.preventDefault();
                 });
                 
                 // Mouse events for desktop testing
@@ -222,8 +255,30 @@ class MobilePacman {
                 btn.addEventListener('mouseup', () => {
                     btn.classList.remove('pressed');
                 });
+                
+                btn.addEventListener('mouseleave', () => {
+                    btn.classList.remove('pressed');
+                });
             }
         });
+        
+        // Pause button
+        const pauseBtn = document.getElementById('btnPause');
+        if (pauseBtn) {
+            pauseBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                this.togglePause();
+            });
+            
+            pauseBtn.addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                this.togglePause();
+                if (navigator.vibrate) {
+                    navigator.vibrate(20);
+                }
+            }, { passive: false });
+        }
         
         // Swipe controls on canvas
         this.canvas.addEventListener('touchstart', (e) => {
@@ -556,29 +611,62 @@ class MobilePacman {
         this.updateUI();
     }
     
+    togglePause() {
+        if (this.gameState === 'playing') {
+            this.gameState = 'paused';
+            this.showMessage('Paused', 'Tap PAUSE to continue');
+            const pauseBtn = document.getElementById('btnPause');
+            if (pauseBtn) pauseBtn.textContent = 'PLAY';
+        } else if (this.gameState === 'paused') {
+            this.gameState = 'playing';
+            this.hideMessage();
+            const pauseBtn = document.getElementById('btnPause');
+            if (pauseBtn) pauseBtn.textContent = 'PAUSE';
+        }
+    }
+    
+    showMessage(title, text, buttonText = null) {
+        const messageEl = document.getElementById('gameMessage');
+        const titleEl = document.getElementById('messageTitle');
+        const textEl = document.getElementById('messageText');
+        const buttonEl = document.getElementById('messageButton');
+        
+        if (messageEl && titleEl && textEl) {
+            titleEl.textContent = title;
+            textEl.textContent = text;
+            
+            if (buttonEl) {
+                if (buttonText) {
+                    buttonEl.textContent = buttonText;
+                    buttonEl.style.display = 'block';
+                } else {
+                    buttonEl.style.display = 'none';
+                }
+            }
+            
+            messageEl.style.display = 'block';
+        }
+    }
+    
+    hideMessage() {
+        const messageEl = document.getElementById('gameMessage');
+        if (messageEl) {
+            messageEl.style.display = 'none';
+        }
+    }
+    
     gameOver() {
         this.gameState = 'gameover';
         cancelAnimationFrame(this.animationId);
         
-        // Draw game over screen
-        setTimeout(() => {
-            this.ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
-            this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
-            
-            this.ctx.fillStyle = '#ffeb3b';
-            this.ctx.font = 'bold 24px sans-serif';
-            this.ctx.textAlign = 'center';
-            this.ctx.fillText('GAME OVER', this.canvas.width / 2, this.canvas.height / 2 - 20);
-            
-            this.ctx.font = '16px sans-serif';
-            this.ctx.fillText(`Score: ${this.score}`, this.canvas.width / 2, this.canvas.height / 2 + 10);
-            
-            this.ctx.font = '12px sans-serif';
-            this.ctx.fillText('Tap to restart', this.canvas.width / 2, this.canvas.height / 2 + 40);
-        }, 500);
+        // Show game over message
+        this.showMessage('GAME OVER', `Final Score: ${this.score}`, 'Play Again');
         
-        // Restart on tap
-        this.canvas.addEventListener('click', () => location.reload(), {once: true});
+        // Setup restart button
+        const buttonEl = document.getElementById('messageButton');
+        if (buttonEl) {
+            buttonEl.onclick = () => location.reload();
+        }
     }
     
     render() {
@@ -586,7 +674,7 @@ class MobilePacman {
         this.ctx.fillStyle = '#000';
         this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
         
-        // Draw maze
+        // Draw maze with better colors
         for (let y = 0; y < this.map.length; y++) {
             for (let x = 0; x < this.map[y].length; x++) {
                 const tile = this.map[y][x];
@@ -594,27 +682,36 @@ class MobilePacman {
                 const py = y * this.cellSize;
                 
                 if (tile === 0) {
-                    // Wall
-                    this.ctx.fillStyle = '#1a1a2e';
+                    // Wall with gradient effect
+                    const gradient = this.ctx.createLinearGradient(px, py, px + this.cellSize, py + this.cellSize);
+                    gradient.addColorStop(0, '#2a2a4e');
+                    gradient.addColorStop(1, '#1a1a3e');
+                    this.ctx.fillStyle = gradient;
                     this.ctx.fillRect(px, py, this.cellSize, this.cellSize);
                     
-                    // Add border effect
-                    this.ctx.strokeStyle = '#2a2a3e';
-                    this.ctx.lineWidth = 1;
+                    // Add subtle border
+                    this.ctx.strokeStyle = '#3a3a5e';
+                    this.ctx.lineWidth = 0.5;
                     this.ctx.strokeRect(px + 0.5, py + 0.5, this.cellSize - 1, this.cellSize - 1);
                 } else if (tile === 1) {
                     // Dot
-                    this.ctx.fillStyle = '#ffeb3b';
+                    this.ctx.fillStyle = '#FFD700';
+                    this.ctx.shadowBlur = 4;
+                    this.ctx.shadowColor = '#FFD700';
                     this.ctx.beginPath();
                     this.ctx.arc(px + this.cellSize/2, py + this.cellSize/2, 2, 0, Math.PI * 2);
                     this.ctx.fill();
+                    this.ctx.shadowBlur = 0;
                 } else if (tile === 2) {
-                    // Power pellet
+                    // Power pellet with pulsing effect
                     const pulse = Math.sin(Date.now() * 0.005) * 0.5 + 0.5;
-                    this.ctx.fillStyle = '#ffeb3b';
+                    this.ctx.fillStyle = '#FFD700';
+                    this.ctx.shadowBlur = 10 + pulse * 5;
+                    this.ctx.shadowColor = '#FFD700';
                     this.ctx.beginPath();
                     this.ctx.arc(px + this.cellSize/2, py + this.cellSize/2, 4 + pulse * 2, 0, Math.PI * 2);
                     this.ctx.fill();
+                    this.ctx.shadowBlur = 0;
                 }
             }
         }
@@ -704,41 +801,114 @@ class MobilePacman {
     }
     
     updateUI() {
-        // Update score
-        const scoreElement = document.getElementById('scoreValue');
+        // Update score with animation
+        const scoreElement = document.getElementById('scoreDisplay');
         if (scoreElement) {
-            scoreElement.textContent = this.score.toString().padStart(6, '0');
-        }
-        
-        // Update lives display
-        const livesElement = document.getElementById('livesValue');
-        if (livesElement) {
-            livesElement.textContent = this.level;
+            const formattedScore = this.score.toString();
+            if (scoreElement.textContent !== formattedScore) {
+                scoreElement.textContent = formattedScore;
+                scoreElement.style.animation = 'none';
+                setTimeout(() => {
+                    scoreElement.style.animation = 'titlePulse 0.3s ease';
+                }, 10);
+            }
         }
         
         // Update life icons
-        const lifeIcons = document.querySelectorAll('.life-icon');
-        lifeIcons.forEach((icon, index) => {
-            icon.style.display = index < this.lives ? 'block' : 'none';
-        });
+        const livesContainer = document.getElementById('livesDisplay');
+        if (livesContainer) {
+            // Clear and recreate life icons
+            livesContainer.innerHTML = '';
+            for (let i = 0; i < this.lives; i++) {
+                const lifeIcon = document.createElement('div');
+                lifeIcon.className = 'life-icon';
+                livesContainer.appendChild(lifeIcon);
+            }
+        }
     }
 }
 
 // Initialize game when page loads
 window.addEventListener('DOMContentLoaded', () => {
-    const game = new MobilePacman();
+    // Show loading overlay
+    const loadingOverlay = document.getElementById('loadingOverlay');
+    if (loadingOverlay) {
+        loadingOverlay.style.display = 'flex';
+    }
     
-    // Prevent scrolling on mobile
-    document.body.addEventListener('touchmove', (e) => {
-        e.preventDefault();
-    }, { passive: false });
-    
-    // Handle visibility change
-    document.addEventListener('visibilitychange', () => {
-        if (document.hidden) {
-            game.gameState = 'paused';
-        } else if (game.gameState === 'paused') {
-            game.gameState = 'playing';
+    // Initialize game after a short delay for smooth loading
+    setTimeout(() => {
+        const game = new MobilePacman();
+        
+        // Hide loading overlay
+        if (loadingOverlay) {
+            loadingOverlay.style.opacity = '0';
+            setTimeout(() => {
+                loadingOverlay.style.display = 'none';
+            }, 300);
         }
-    });
+        
+        // Prevent scrolling on mobile
+        document.body.addEventListener('touchmove', (e) => {
+            if (e.target.closest('.controls-container')) return;
+            e.preventDefault();
+        }, { passive: false });
+        
+        // Prevent zoom on double tap
+        let lastTouchEnd = 0;
+        document.addEventListener('touchend', (e) => {
+            const now = Date.now();
+            if (now - lastTouchEnd <= 300) {
+                e.preventDefault();
+            }
+            lastTouchEnd = now;
+        }, { passive: false });
+        
+        // Handle visibility change
+        document.addEventListener('visibilitychange', () => {
+            if (document.hidden && game.gameState === 'playing') {
+                game.togglePause();
+            }
+        });
+        
+        // PWA install prompt
+        let deferredPrompt;
+        window.addEventListener('beforeinstallprompt', (e) => {
+            e.preventDefault();
+            deferredPrompt = e;
+            
+            const installPrompt = document.getElementById('installPrompt');
+            const installAccept = document.getElementById('installAccept');
+            const installDismiss = document.getElementById('installDismiss');
+            
+            if (installPrompt && !localStorage.getItem('installPromptDismissed')) {
+                setTimeout(() => {
+                    installPrompt.style.display = 'block';
+                }, 3000);
+                
+                if (installAccept) {
+                    installAccept.addEventListener('click', async () => {
+                        installPrompt.style.display = 'none';
+                        deferredPrompt.prompt();
+                        const { outcome } = await deferredPrompt.userChoice;
+                        deferredPrompt = null;
+                    });
+                }
+                
+                if (installDismiss) {
+                    installDismiss.addEventListener('click', () => {
+                        installPrompt.style.display = 'none';
+                        localStorage.setItem('installPromptDismissed', 'true');
+                    });
+                }
+            }
+        });
+        
+        // Service Worker registration for PWA
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('/sw.js').catch(() => {
+                // Service worker registration failed, app still works
+            });
+        }
+    }, 100);
 });
