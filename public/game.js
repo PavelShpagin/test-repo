@@ -200,69 +200,96 @@
       this.mouthAngle += this.animSpeed * deltaTime;
       if (this.mouthAngle > Math.PI * 2) this.mouthAngle = 0;
 
-      // Check if we can change direction
-      const nextTileX = this.tileX + this.nextDirection.x;
-      const nextTileY = this.tileY + this.nextDirection.y;
-      
-      if (this.nextDirection.x !== 0 || this.nextDirection.y !== 0) {
+      // Check if we're at tile center for direction changes
+      const centerX = this.tileX * TILE + TILE / 2;
+      const centerY = this.tileY * TILE + TILE / 2;
+      const atCenter = Math.abs(this.x - centerX) < 2 && Math.abs(this.y - centerY) < 2;
+
+      if (atCenter && (this.nextDirection.x !== 0 || this.nextDirection.y !== 0)) {
+        const nextTileX = this.tileX + this.nextDirection.x;
+        const nextTileY = this.tileY + this.nextDirection.y;
+        
         if (isValidPosition(nextTileX, nextTileY)) {
           this.direction = { ...this.nextDirection };
           this.nextDirection = { x: 0, y: 0 };
+          // Snap to exact center for perfect alignment
+          this.x = centerX;
+          this.y = centerY;
         }
       }
 
-      // Move Pac-Man
-      const newX = this.x + this.direction.x * this.speed * deltaTime;
-      const newY = this.y + this.direction.y * this.speed * deltaTime;
-      
-      const newTileX = Math.floor(newX / TILE);
-      const newTileY = Math.floor(newY / TILE);
+      // Move Pac-Man with anti-overshoot
+      if (this.direction.x !== 0 || this.direction.y !== 0) {
+        const newX = this.x + this.direction.x * this.speed * deltaTime;
+        const newY = this.y + this.direction.y * this.speed * deltaTime;
+        
+        // Calculate which tile we're moving into
+        const newTileX = Math.round((newX - TILE/2) / TILE);
+        const newTileY = Math.round((newY - TILE/2) / TILE);
 
-      // Check if new position is valid
-      if (isValidPosition(newTileX, newTileY)) {
-        this.x = newX;
-        this.y = newY;
-        this.tileX = newTileX;
-        this.tileY = newTileY;
-      } else {
-        // Stop at wall and center
-        const center = getTileCenter(this.tileX, this.tileY);
-        this.x = center.x;
-        this.y = center.y;
-        this.direction = { x: 0, y: 0 };
+        // Anti-overshoot: check if we're going too far from tile center
+        const targetCenterX = newTileX * TILE + TILE / 2;
+        const targetCenterY = newTileY * TILE + TILE / 2;
+        const maxDistance = TILE * 0.4; // Don't go more than 40% from center
+
+        // Clamp position to prevent overshooting
+        let clampedX = newX;
+        let clampedY = newY;
+        
+        if (Math.abs(newX - targetCenterX) > maxDistance) {
+          clampedX = targetCenterX + Math.sign(newX - targetCenterX) * maxDistance;
+        }
+        if (Math.abs(newY - targetCenterY) > maxDistance) {
+          clampedY = targetCenterY + Math.sign(newY - targetCenterY) * maxDistance;
+        }
+
+        // Check if new position is valid
+        if (isValidPosition(newTileX, newTileY)) {
+          this.x = clampedX;
+          this.y = clampedY;
+          this.tileX = newTileX;
+          this.tileY = newTileY;
+        } else {
+          // Stop at wall and center perfectly
+          this.x = centerX;
+          this.y = centerY;
+          this.direction = { x: 0, y: 0 };
+        }
       }
 
-      // Tunnel wrap-around
-      if (this.x < 0) {
-        this.x = canvas.width;
+      // Tunnel wrap-around with precise positioning
+      if (this.x < -TILE/2) {
+        this.x = canvas.width + TILE/2;
         this.tileX = COLS - 1;
-      } else if (this.x > canvas.width) {
-        this.x = 0;
+      } else if (this.x > canvas.width + TILE/2) {
+        this.x = -TILE/2;
         this.tileX = 0;
       }
 
-      // Eat dots and power pellets
-      const currentTile = grid[this.tileY] && grid[this.tileY][this.tileX];
-      if (currentTile === DOT) {
-        grid[this.tileY][this.tileX] = EMPTY;
-        game.score += 10;
-        game.dotsRemaining--;
-        createParticles(this.x, this.y, '#FFFF00', 4);
-        playEatSound();
-        
-        if (game.dotsRemaining <= 0) {
-          nextLevel();
-        }
-      } else if (currentTile === POWER) {
-        grid[this.tileY][this.tileX] = EMPTY;
-        game.score += 50;
-        game.dotsRemaining--;
-        createParticles(this.x, this.y, '#FFB8FF', 8);
-        activateFrightenedMode();
-        playPowerSound();
-        
-        if (game.dotsRemaining <= 0) {
-          nextLevel();
+      // Eat dots and power pellets (only when centered)
+      if (atCenter) {
+        const currentTile = grid[this.tileY] && grid[this.tileY][this.tileX];
+        if (currentTile === DOT) {
+          grid[this.tileY][this.tileX] = EMPTY;
+          game.score += 10;
+          game.dotsRemaining--;
+          createParticles(this.x, this.y, '#FFFF00', 4);
+          playEatSound();
+          
+          if (game.dotsRemaining <= 0) {
+            nextLevel();
+          }
+        } else if (currentTile === POWER) {
+          grid[this.tileY][this.tileX] = EMPTY;
+          game.score += 50;
+          game.dotsRemaining--;
+          createParticles(this.x, this.y, '#FFB8FF', 8);
+          activateFrightenedMode();
+          playPowerSound();
+          
+          if (game.dotsRemaining <= 0) {
+            nextLevel();
+          }
         }
       }
     }
@@ -361,33 +388,54 @@
         this.chooseDirection(pacman);
       }
 
-      // Move ghost
-      const newX = this.x + this.direction.x * this.speed * deltaTime;
-      const newY = this.y + this.direction.y * this.speed * deltaTime;
-      
-      const newTileX = Math.floor(newX / TILE);
-      const newTileY = Math.floor(newY / TILE);
+      // Move ghost with anti-overshoot
+      if (this.direction.x !== 0 || this.direction.y !== 0) {
+        const newX = this.x + this.direction.x * this.speed * deltaTime;
+        const newY = this.y + this.direction.y * this.speed * deltaTime;
+        
+        // Calculate which tile we're moving into
+        const newTileX = Math.round((newX - TILE/2) / TILE);
+        const newTileY = Math.round((newY - TILE/2) / TILE);
 
-      if (isValidPosition(newTileX, newTileY)) {
-        this.x = newX;
-        this.y = newY;
-        this.tileX = newTileX;
-        this.tileY = newTileY;
-      } else {
-        // Hit wall - center and choose new direction
-        const center = getTileCenter(this.tileX, this.tileY);
-        this.x = center.x;
-        this.y = center.y;
-        this.chooseDirection(pacman);
-      }
+        // Anti-overshoot: check if we're going too far from tile center
+        const targetCenterX = newTileX * TILE + TILE / 2;
+        const targetCenterY = newTileY * TILE + TILE / 2;
+        const maxDistance = TILE * 0.4; // Don't go more than 40% from center
 
-      // Tunnel wrap-around
-      if (this.x < 0) {
-        this.x = canvas.width;
-        this.tileX = COLS - 1;
-      } else if (this.x > canvas.width) {
-        this.x = 0;
-        this.tileX = 0;
+        // Clamp position to prevent overshooting
+        let clampedX = newX;
+        let clampedY = newY;
+        
+        if (Math.abs(newX - targetCenterX) > maxDistance) {
+          clampedX = targetCenterX + Math.sign(newX - targetCenterX) * maxDistance;
+        }
+        if (Math.abs(newY - targetCenterY) > maxDistance) {
+          clampedY = targetCenterY + Math.sign(newY - targetCenterY) * maxDistance;
+        }
+
+        // Handle tunnel wrap-around
+        let finalX = clampedX;
+        let finalTileX = newTileX;
+        if (clampedX < -TILE/2) {
+          finalX = canvas.width + TILE/2;
+          finalTileX = COLS - 1;
+        } else if (clampedX > canvas.width + TILE/2) {
+          finalX = -TILE/2;
+          finalTileX = 0;
+        }
+
+        if (isValidPosition(finalTileX, newTileY)) {
+          this.x = finalX;
+          this.y = clampedY;
+          this.tileX = finalTileX;
+          this.tileY = newTileY;
+        } else {
+          // Hit wall - center and choose new direction
+          const center = getTileCenter(this.tileX, this.tileY);
+          this.x = center.x;
+          this.y = center.y;
+          this.chooseDirection(pacman);
+        }
       }
     }
 
