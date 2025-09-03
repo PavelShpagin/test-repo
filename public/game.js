@@ -142,20 +142,41 @@
         }
       }
 
-      // Simple movement
-      const newX = this.x + this.direction.x * this.speed * deltaTime;
-      const newY = this.y + this.direction.y * this.speed * deltaTime;
-      
-      const newTileX = Math.floor(newX / TILE);
-      const newTileY = Math.floor(newY / TILE);
+      // Movement with perfect corridor alignment
+      if (this.direction.x !== 0 || this.direction.y !== 0) {
+        const newX = this.x + this.direction.x * this.speed * deltaTime;
+        const newY = this.y + this.direction.y * this.speed * deltaTime;
+        
+        const newTileX = Math.floor(newX / TILE);
+        const newTileY = Math.floor(newY / TILE);
 
-      if (isValidPosition(newTileX, newTileY)) {
-        this.x = newX;
-        this.y = newY;
-        this.tileX = newTileX;
-        this.tileY = newTileY;
-      } else {
-        this.direction = { x: 0, y: 0 };
+        if (isValidPosition(newTileX, newTileY)) {
+          // Keep in corridor center - simple math only
+          const centerX = newTileX * TILE + TILE / 2;
+          const centerY = newTileY * TILE + TILE / 2;
+          const maxDist = TILE * 0.35;
+          
+          const distX = newX - centerX;
+          const distY = newY - centerY;
+          
+          // Simple clamping - no complex calculations
+          if (distX > maxDist) this.x = centerX + maxDist;
+          else if (distX < -maxDist) this.x = centerX - maxDist;
+          else this.x = newX;
+          
+          if (distY > maxDist) this.y = centerY + maxDist;
+          else if (distY < -maxDist) this.y = centerY - maxDist;
+          else this.y = newY;
+          
+          this.tileX = newTileX;
+          this.tileY = newTileY;
+        } else {
+          // Wall hit - center perfectly
+          const center = getTileCenter(this.tileX, this.tileY);
+          this.x = center.x;
+          this.y = center.y;
+          this.direction = { x: 0, y: 0 };
+        }
       }
 
       // Tunnel wrap
@@ -275,20 +296,41 @@
         this.pickDirection(pacman);
       }
 
-      // Simple movement
-      const newX = this.x + this.direction.x * this.speed * deltaTime;
-      const newY = this.y + this.direction.y * this.speed * deltaTime;
-      
-      const newTileX = Math.floor(newX / TILE);
-      const newTileY = Math.floor(newY / TILE);
+      // Movement with perfect corridor alignment
+      if (this.direction.x !== 0 || this.direction.y !== 0) {
+        const newX = this.x + this.direction.x * this.speed * deltaTime;
+        const newY = this.y + this.direction.y * this.speed * deltaTime;
+        
+        const newTileX = Math.floor(newX / TILE);
+        const newTileY = Math.floor(newY / TILE);
 
-      if (isValidPosition(newTileX, newTileY)) {
-        this.x = newX;
-        this.y = newY;
-        this.tileX = newTileX;
-        this.tileY = newTileY;
-      } else {
-        this.direction = { x: 0, y: 0 };
+        if (isValidPosition(newTileX, newTileY)) {
+          // Keep in corridor center - simple math only
+          const centerX = newTileX * TILE + TILE / 2;
+          const centerY = newTileY * TILE + TILE / 2;
+          const maxDist = TILE * 0.35;
+          
+          const distX = newX - centerX;
+          const distY = newY - centerY;
+          
+          // Simple clamping - no complex calculations
+          if (distX > maxDist) this.x = centerX + maxDist;
+          else if (distX < -maxDist) this.x = centerX - maxDist;
+          else this.x = newX;
+          
+          if (distY > maxDist) this.y = centerY + maxDist;
+          else if (distY < -maxDist) this.y = centerY - maxDist;
+          else this.y = newY;
+          
+          this.tileX = newTileX;
+          this.tileY = newTileY;
+        } else {
+          // Wall hit - center perfectly
+          const center = getTileCenter(this.tileX, this.tileY);
+          this.x = center.x;
+          this.y = center.y;
+          this.direction = { x: 0, y: 0 };
+        }
       }
 
       // Tunnel wrap
