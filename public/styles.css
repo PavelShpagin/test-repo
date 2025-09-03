@@ -181,6 +181,15 @@ canvas#game {
   font-size: 11px;
 }
 
+#gameMessage {
+  color: var(--hud-color);
+  font-size: 14px;
+  font-weight: bold;
+  margin: 15px 0;
+  text-shadow: 0 0 10px rgba(255, 215, 0, 0.8);
+  min-height: 20px;
+}
+
 .overlay button {
   background: linear-gradient(45deg, var(--maze-color), var(--neon-blue));
   border: none;
