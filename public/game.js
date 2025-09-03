@@ -163,10 +163,6 @@
       const { x: tx, y: ty } = this.tile;
       const center = tileCenter(tx, ty);
       
-      // Snap to tile center when crossing center
-      if (this.dir.x !== 0 && Math.sign(center.x - this.x) !== Math.sign(this.dir.x)) this.x = center.x;
-      if (this.dir.y !== 0 && Math.sign(center.y - this.y) !== Math.sign(this.dir.y)) this.y = center.y;
-
       // Keep entity aligned to corridor to avoid getting stuck against walls
       if (this.dir.x !== 0) this.y = center.y;
       if (this.dir.y !== 0) this.x = center.x;
@@ -190,6 +186,14 @@
       // Calculate new position
       const stepX = this.dir.x * this.speed * dt;
       const stepY = this.dir.y * this.speed * dt;
+
+      // Snap to tile center only if the next step would cross the center along the movement axis
+      if (this.dir.x !== 0 && Math.sign(center.x - this.x) === Math.sign(this.dir.x) && Math.abs(center.x - this.x) <= Math.abs(stepX)) {
+        this.x = center.x;
+      }
+      if (this.dir.y !== 0 && Math.sign(center.y - this.y) === Math.sign(this.dir.y) && Math.abs(center.y - this.y) <= Math.abs(stepY)) {
+        this.y = center.y;
+      }
 
       // Determine whether we are about to cross into the next tile along our direction
       const aboutToCrossX = this.dir.x !== 0 && Math.abs(center.x - this.x) <= Math.abs(stepX);
