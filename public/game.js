@@ -17,6 +17,7 @@
   const livesEl = document.getElementById('lives');
   const overlay = document.getElementById('overlay');
   const startBtn = document.getElementById('startBtn');
+  const highScoreValueEl = document.getElementById('highScoreValue');
 
   // Game constants
   const COLS = 19;
@@ -77,7 +78,10 @@
     frightenedMode: false,
     frightenedTimer: 0,
     gameStarted: false,
-    particles: []
+    particles: [],
+    highScore: parseInt(localStorage.getItem('pacman-highscore') || '0'),
+    ghostsEaten: 0,
+    powerPelletBonus: 0
   };
 
   // Safe memory grid system
@@ -262,6 +266,42 @@
     }
   }
 
+  // Score popup system
+  class ScorePopup {
+    constructor(x, y, score) {
+      this.x = x;
+      this.y = y;
+      this.score = score;
+      this.life = 2.0;
+      this.decay = 0.02;
+    }
+
+    update(deltaTime) {
+      this.y -= 30 * deltaTime;
+      this.life -= this.decay;
+    }
+
+    draw() {
+      ctx.save();
+      ctx.globalAlpha = this.life;
+      ctx.fillStyle = '#FFFF00';
+      ctx.font = 'bold 14px Arial';
+      ctx.textAlign = 'center';
+      ctx.shadowColor = '#FFFF00';
+      ctx.shadowBlur = 5;
+      ctx.fillText(`${this.score}`, this.x, this.y);
+      ctx.restore();
+    }
+
+    isDead() {
+      return this.life <= 0;
+    }
+  }
+
+  function createScorePopup(x, y, score) {
+    game.particles.push(new ScorePopup(x, y, score));
+  }
+
   // Optimized Pac-Man class
   class PacMan {
     constructor() {
@@ -352,6 +392,8 @@
             } else if (collected === POWER) {
               game.score += 50;
               game.dotsRemaining--;
+              game.powerPelletBonus = 200; // Reset bonus for eating ghosts
+              game.ghostsEaten = 0;
               createParticles(this.pixelX, this.pixelY, '#FFB8FF', 8);
               activateFrightenedMode();
               playPowerSound();
@@ -719,9 +761,15 @@
       // Grid-based collision
       if (ghost.gridX === pacman.gridX && ghost.gridY === pacman.gridY) {
         if (ghost.frightened) {
-          // Eat ghost
-          game.score += 200;
+          // Eat ghost with increasing bonus
+          game.ghostsEaten++;
+          const bonus = game.powerPelletBonus * game.ghostsEaten;
+          game.score += bonus;
+          
+          // Show bonus score
+          createScorePopup(ghost.pixelX, ghost.pixelY, bonus);
           createParticles(ghost.pixelX, ghost.pixelY, ghost.originalColor, 10);
+          
           ghost.reset();
           ghost.spawnTimer = 5000;
           playPowerSound();
@@ -775,6 +823,14 @@
   function gameOver() {
     game.running = false;
     game.gameStarted = false;
+    
+    // Save high score
+    if (game.score > game.highScore) {
+      game.highScore = game.score;
+      localStorage.setItem('pacman-highscore', game.highScore.toString());
+      createParticles(canvas.width / 2, canvas.height / 2, '#FFD700', 25);
+    }
+    
     overlay.classList.add('show');
     startBtn.textContent = 'Play Again';
   }
@@ -786,8 +842,15 @@
     game.level = 1;
     game.running = true;
     game.gameStarted = true;
+    game.ghostsEaten = 0;
+    game.powerPelletBonus = 0;
     resetLevel();
     updateHUD();
+    
+    // Update high score display
+    if (highScoreValueEl) {
+      highScoreValueEl.textContent = game.highScore.toString();
+    }
   }
 
   // Drawing functions
@@ -884,6 +947,11 @@
     scoreEl.textContent = game.score.toString().padStart(6, '0');
     levelEl.textContent = game.level.toString();
     livesEl.textContent = '❤'.repeat(Math.max(0, game.lives));
+    
+    // Update high score display in title
+    if (game.score > 0) {
+      document.title = `Pac-Man - Score: ${game.score} | High: ${game.highScore}`;
+    }
   }
 
   function drawGameInfo() {
@@ -905,10 +973,18 @@
       if (game.lives <= 0) {
         ctx.fillStyle = '#FF0000';
         ctx.font = 'bold 24px Arial';
-        ctx.fillText('GAME OVER', canvas.width / 2, canvas.height / 2 - 15);
+        ctx.fillText('GAME OVER', canvas.width / 2, canvas.height / 2 - 25);
         ctx.font = '14px Arial';
         ctx.fillStyle = '#FFFFFF';
-        ctx.fillText(`Final Score: ${game.score}`, canvas.width / 2, canvas.height / 2 + 15);
+        ctx.fillText(`Final Score: ${game.score}`, canvas.width / 2, canvas.height / 2);
+        ctx.fillStyle = '#FFD700';
+        ctx.fillText(`High Score: ${game.highScore}`, canvas.width / 2, canvas.height / 2 + 20);
+        
+        if (game.score === game.highScore && game.score > 0) {
+          ctx.fillStyle = '#00FF00';
+          ctx.font = 'bold 12px Arial';
+          ctx.fillText('NEW HIGH SCORE!', canvas.width / 2, canvas.height / 2 + 40);
+        }
       } else if (game.dotsRemaining <= 0) {
         ctx.fillStyle = '#00FF00';
         ctx.font = 'bold 20px Arial';
@@ -1087,10 +1163,16 @@
   initGame();
   setupMobileControls();
   updateHUD();
+  
+  // Initialize high score display
+  if (highScoreValueEl) {
+    highScoreValueEl.textContent = game.highScore.toString();
+  }
+  
   requestAnimationFrame(gameLoop);
 
   canvas.focus();
   canvas.addEventListener('contextmenu', e => e.preventDefault());
   
-  console.log('Performance-Optimized Pac-Man Ready! 🎮⚡');
+  console.log('Production-Ready Pac-Man with High Scores! 🎮🏆');
 })();
