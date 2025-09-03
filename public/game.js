@@ -200,7 +200,10 @@
       const a2 = (angle || 0) - open;
       ctx.fillStyle = '#ffe300';
       ctx.beginPath();
-      ctx.moveTo(0, 0);
+      // Draw Pac-Man as a full body with a mouth wedge missing by
+      // drawing the long arc around the circle and closing across the mouth.
+      // Important: do NOT move to the center first, otherwise we'd only draw
+      // the small triangular slice instead of the full body.
       ctx.arc(0, 0, radius, a1, a2, true);
       ctx.closePath();
       ctx.fill();
@@ -594,6 +597,11 @@
     drawHUD();
   }
   startBtn.addEventListener('click', startGame);
+
+  // Auto-start the game so controls and ghosts are active immediately.
+  // This avoids a confusing initial state where nothing moves until the
+  // player presses Start. There is no audio gating, so this is safe.
+  startGame();
 
   // Asset loader placeholder – if user drops sprites into ./assets, they will be used.
   // This demo uses vector graphics by default for zero-setup play.
