@@ -502,14 +502,28 @@
   window.addEventListener('keydown', (e)=>{
     const m = keyMap[e.code]; if (!m) return;
     e.preventDefault();
+    if (!state.running) {
+      // Start the game on first input
+      overlay.classList.remove('show');
+      state.score = 0; state.lives = 3; state.level = 1; resetLevel(false); state.running = true; drawHUD();
+    }
     pacman.setDirection(m[0], m[1]);
   });
 
   function bindBtn(id, dx, dy) {
     const el = document.getElementById(id);
-    const set = ()=> pacman.setDirection(dx, dy);
+    const set = ()=> {
+      if (!state.running) {
+        overlay.classList.remove('show');
+        state.score = 0; state.lives = 3; state.level = 1; resetLevel(false); state.running = true; drawHUD();
+      }
+      pacman.setDirection(dx, dy);
+    };
+    // Support pointer, touch, mouse, and click for broader compatibility
+    el.addEventListener('pointerdown', (e)=>{ e.preventDefault(); set(); });
     el.addEventListener('touchstart', (e)=>{ e.preventDefault(); set(); }, { passive: false });
     el.addEventListener('mousedown', (e)=>{ e.preventDefault(); set(); });
+    el.addEventListener('click', (e)=>{ e.preventDefault(); set(); });
   }
   bindBtn('btnUp', 0, -1); bindBtn('btnDown', 0, 1); bindBtn('btnLeft', -1, 0); bindBtn('btnRight', 1, 0);
 
@@ -520,6 +534,10 @@
     if (!touchStart) return;
     const t = e.changedTouches[0];
     const dx = t.clientX - touchStart.x; const dy = t.clientY - touchStart.y;
+    if (!state.running) {
+      overlay.classList.remove('show');
+      state.score = 0; state.lives = 3; state.level = 1; resetLevel(false); state.running = true; drawHUD();
+    }
     if (Math.abs(dx) > Math.abs(dy)) pacman.setDirection(Math.sign(dx), 0);
     else pacman.setDirection(0, Math.sign(dy));
     touchStart = null;
@@ -565,11 +583,17 @@
   }
   requestAnimationFrame(frame);
 
-  // Start button
-  startBtn.addEventListener('click', () => {
+  // Start button -> shared start behavior
+  function startGame() {
     overlay.classList.remove('show');
-    state.score = 0; state.lives = 3; state.level = 1; resetLevel(false); state.running = true; drawHUD();
-  });
+    state.score = 0;
+    state.lives = 3;
+    state.level = 1;
+    resetLevel(false);
+    state.running = true;
+    drawHUD();
+  }
+  startBtn.addEventListener('click', startGame);
 
   // Asset loader placeholder – if user drops sprites into ./assets, they will be used.
   // This demo uses vector graphics by default for zero-setup play.
