@@ -77,7 +77,8 @@
     frightenedMode: false,
     frightenedTimer: 0,
     gameStarted: false,
-    particles: []
+    particles: [],
+    highScore: parseInt(localStorage.getItem('pacman-highscore') || '0')
   };
 
   // Memory grid system
