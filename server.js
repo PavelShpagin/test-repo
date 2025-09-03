@@ -64,18 +64,21 @@ server.listen(PORT, () => {
   console.log(`Serving from ${PUBLIC_DIR}`);
   console.log(`Game running at ${url}`);
 
-  // Try to open the browser automatically
-  const platform = process.platform;
-  let opener;
-  if (platform === 'darwin') opener = 'open';
-  else if (platform === 'win32') opener = 'start';
-  else opener = 'xdg-open';
+  // Skip auto-open in CI/containers to avoid failures
+  if (!process.env.CI && !process.env.CONTAINERIZED) {
+    // Try to open the browser automatically
+    const platform = process.platform;
+    let opener;
+    if (platform === 'darwin') opener = 'open';
+    else if (platform === 'win32') opener = 'start';
+    else opener = 'xdg-open';
 
-  try {
-    const child = spawn(opener, [url], { stdio: 'ignore', shell: true, detached: true });
-    child.unref();
-  } catch (e) {
-    console.log('Please open your browser to', url);
+    try {
+      const child = spawn(opener, [url], { stdio: 'ignore', shell: true, detached: true });
+      child.unref();
+    } catch (e) {
+      console.log('Please open your browser to', url);
+    }
   }
 });
 
