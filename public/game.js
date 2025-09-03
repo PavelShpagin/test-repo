@@ -1,6 +1,6 @@
 /*
-  Pac‑Man JS – Grid-Based Memory System
-  Complete remake with proper grid-based collision and BFS pathfinding
+  Pac‑Man JS – Grid-Based with Smooth UI Movement
+  Grid logic + smooth visual interpolation + proper collision
 */
 
 (function() {
@@ -125,21 +125,11 @@
       }
     }
 
-    isValidMove(x, y, entityType = EMPTY) {
+    isValidMove(x, y) {
       if (x < 0 || y < 0 || x >= COLS || y >= ROWS) return false;
       
-      const cell = this.grid[y][x];
-      
-      // Walls are always blocked
-      if (cell === WALL) return false;
-      
-      // For pathfinding, treat other entities as obstacles
-      if (entityType === EMPTY) {
-        return cell === EMPTY || cell === DOT || cell === POWER;
-      }
-      
-      // For entity movement, check if cell is free or contains collectibles
-      return cell === EMPTY || cell === DOT || cell === POWER;
+      const cell = this.staticGrid[y][x];
+      return cell !== WALL;
     }
 
     moveEntity(fromX, fromY, toX, toY, entityType) {
@@ -165,7 +155,7 @@
       return null;
     }
 
-    // BFS pathfinding algorithm
+    // BFS pathfinding algorithm - ghosts target grid value 2 (PACMAN)
     findPath(startX, startY, targetX, targetY) {
       if (!this.isValidMove(startX, startY) || !this.isValidMove(targetX, targetY)) {
         return null;
@@ -185,7 +175,7 @@
       while (queue.length > 0) {
         const current = queue.shift();
         
-        // Found target
+        // Found target (Pac-Man at grid value 2)
         if (current.x === targetX && current.y === targetY) {
           return current.path;
         }
@@ -270,7 +260,7 @@
     }
   }
 
-  // Grid-based Pac-Man class
+  // Grid-based Pac-Man with smooth UI movement
   class PacMan {
     constructor() {
       this.reset();
@@ -285,9 +275,12 @@
       this.gridY = 15;
       this.pixelX = this.gridX * TILE + TILE / 2;
       this.pixelY = this.gridY * TILE + TILE / 2;
+      this.targetPixelX = this.pixelX;
+      this.targetPixelY = this.pixelY;
       this.direction = {x: 0, y: 0};
       this.nextDirection = {x: 0, y: 0};
       this.moveTimer = 0;
+      this.moving = false;
       
       // Place in grid
       gameGrid.moveEntity(-1, -1, this.gridX, this.gridY, PACMAN);
@@ -304,10 +297,25 @@
       this.mouthAngle += this.animSpeed * deltaTime;
       if (this.mouthAngle > Math.PI * 2) this.mouthAngle = 0;
 
+      // Smooth movement interpolation
+      if (this.moving) {
+        const lerpSpeed = 8; // Smooth interpolation speed
+        this.pixelX += (this.targetPixelX - this.pixelX) * lerpSpeed * deltaTime;
+        this.pixelY += (this.targetPixelY - this.pixelY) * lerpSpeed * deltaTime;
+        
+        // Check if we've reached the target
+        if (Math.abs(this.pixelX - this.targetPixelX) < 1 && 
+            Math.abs(this.pixelY - this.targetPixelY) < 1) {
+          this.pixelX = this.targetPixelX;
+          this.pixelY = this.targetPixelY;
+          this.moving = false;
+        }
+      }
+
       // Update move timer
       this.moveTimer += deltaTime * 1000;
 
-      if (this.moveTimer >= this.moveInterval) {
+      if (this.moveTimer >= this.moveInterval && !this.moving) {
         this.moveTimer = 0;
 
         // Try to change direction if requested
@@ -315,7 +323,7 @@
           const nextX = this.gridX + this.nextDirection.x;
           const nextY = this.gridY + this.nextDirection.y;
           
-          if (gameGrid.isValidMove(nextX, nextY, PACMAN)) {
+          if (gameGrid.isValidMove(nextX, nextY)) {
             this.direction = {...this.nextDirection};
             this.nextDirection = {x: 0, y: 0};
           }
@@ -331,7 +339,7 @@
           if (newX < 0) finalX = COLS - 1;
           else if (newX >= COLS) finalX = 0;
 
-          if (gameGrid.isValidMove(finalX, newY, PACMAN)) {
+          if (gameGrid.isValidMove(finalX, newY)) {
             // Move entity in grid
             gameGrid.moveEntity(this.gridX, this.gridY, finalX, newY, PACMAN);
             
@@ -358,11 +366,12 @@
               }
             }
 
-            // Update position
+            // Update position and start smooth movement
             this.gridX = finalX;
             this.gridY = newY;
-            this.pixelX = this.gridX * TILE + TILE / 2;
-            this.pixelY = this.gridY * TILE + TILE / 2;
+            this.targetPixelX = this.gridX * TILE + TILE / 2;
+            this.targetPixelY = this.gridY * TILE + TILE / 2;
+            this.moving = true;
           } else {
             // Can't move, stop
             this.direction = {x: 0, y: 0};
@@ -413,7 +422,7 @@
     }
   }
 
-  // Grid-based Ghost class with BFS pathfinding
+  // Grid-based Ghost with smooth UI movement and BFS pathfinding
   class Ghost {
     constructor(name, color, startX, startY, entityType) {
       this.name = name;
@@ -433,6 +442,8 @@
       this.gridY = this.startGridY;
       this.pixelX = this.gridX * TILE + TILE / 2;
       this.pixelY = this.gridY * TILE + TILE / 2;
+      this.targetPixelX = this.pixelX;
+      this.targetPixelY = this.pixelY;
       this.direction = {x: 0, y: 0};
       this.frightened = false;
       this.frightenedTimer = 0;
@@ -441,6 +452,7 @@
       this.moveInterval = 1000 / GHOST_SPEED;
       this.pathfindingTimer = 0;
       this.currentPath = [];
+      this.moving = false;
       
       // Place in grid
       gameGrid.moveEntity(-1, -1, this.gridX, this.gridY, this.entityType);
@@ -465,6 +477,21 @@
         }
       }
 
+      // Smooth movement interpolation
+      if (this.moving) {
+        const lerpSpeed = 8; // Smooth interpolation speed
+        this.pixelX += (this.targetPixelX - this.pixelX) * lerpSpeed * deltaTime;
+        this.pixelY += (this.targetPixelY - this.pixelY) * lerpSpeed * deltaTime;
+        
+        // Check if we've reached the target
+        if (Math.abs(this.pixelX - this.targetPixelX) < 1 && 
+            Math.abs(this.pixelY - this.targetPixelY) < 1) {
+          this.pixelX = this.targetPixelX;
+          this.pixelY = this.targetPixelY;
+          this.moving = false;
+        }
+      }
+
       // Update pathfinding timer
       this.pathfindingTimer += deltaTime * 1000;
       if (this.pathfindingTimer >= this.pathfindingInterval) {
@@ -475,7 +502,7 @@
       // Update move timer
       this.moveTimer += deltaTime * 1000;
 
-      if (this.moveTimer >= this.moveInterval) {
+      if (this.moveTimer >= this.moveInterval && !this.moving) {
         this.moveTimer = 0;
         this.makeMove();
       }
@@ -483,21 +510,30 @@
 
     calculatePath(pacman) {
       if (this.frightened) {
-        // When frightened, move randomly
+        // When frightened, move randomly away from Pac-Man
         const directions = [
           {x: 0, y: -1}, {x: 1, y: 0}, {x: 0, y: 1}, {x: -1, y: 0}
         ];
         const validDirs = directions.filter(dir => {
           const newX = this.gridX + dir.x;
           const newY = this.gridY + dir.y;
-          return gameGrid.isValidMove(newX, newY, this.entityType);
+          return gameGrid.isValidMove(newX, newY);
         });
         
         if (validDirs.length > 0) {
-          this.direction = validDirs[Math.floor(Math.random() * validDirs.length)];
+          // Prefer directions away from Pac-Man
+          const distances = validDirs.map(dir => {
+            const newX = this.gridX + dir.x;
+            const newY = this.gridY + dir.y;
+            const dx = newX - pacman.gridX;
+            const dy = newY - pacman.gridY;
+            return Math.sqrt(dx * dx + dy * dy);
+          });
+          const maxDistIndex = distances.indexOf(Math.max(...distances));
+          this.direction = validDirs[maxDistIndex];
         }
       } else {
-        // Use BFS to find path to Pac-Man
+        // Use BFS to find path to Pac-Man (grid value 2)
         const path = gameGrid.findPath(this.gridX, this.gridY, pacman.gridX, pacman.gridY);
         if (path && path.length > 0) {
           this.currentPath = path;
@@ -510,7 +546,7 @@
           const validDirs = directions.filter(dir => {
             const newX = this.gridX + dir.x;
             const newY = this.gridY + dir.y;
-            return gameGrid.isValidMove(newX, newY, this.entityType);
+            return gameGrid.isValidMove(newX, newY);
           });
           
           if (validDirs.length > 0) {
@@ -531,15 +567,16 @@
       if (newX < 0) finalX = COLS - 1;
       else if (newX >= COLS) finalX = 0;
 
-      if (gameGrid.isValidMove(finalX, newY, this.entityType)) {
+      if (gameGrid.isValidMove(finalX, newY)) {
         // Move entity in grid
         gameGrid.moveEntity(this.gridX, this.gridY, finalX, newY, this.entityType);
         
-        // Update position
+        // Update position and start smooth movement
         this.gridX = finalX;
         this.gridY = newY;
-        this.pixelX = this.gridX * TILE + TILE / 2;
-        this.pixelY = this.gridY * TILE + TILE / 2;
+        this.targetPixelX = this.gridX * TILE + TILE / 2;
+        this.targetPixelY = this.gridY * TILE + TILE / 2;
+        this.moving = true;
 
         // Remove first step from current path
         if (this.currentPath.length > 0) {
@@ -581,7 +618,7 @@
       ctx.closePath();
       ctx.fill();
 
-      // Eyes
+      // Eyes with direction tracking
       ctx.shadowBlur = 0;
       ctx.fillStyle = '#FFFFFF';
       ctx.beginPath();
@@ -589,11 +626,17 @@
       ctx.arc(radius * 0.3, -radius * 0.2, radius * 0.15, 0, Math.PI * 2);
       ctx.fill();
 
-      // Pupils
+      // Pupils that show movement direction
       ctx.fillStyle = '#000000';
+      const pupilOffset = 2;
+      const leftPupilX = -radius * 0.3 + this.direction.x * pupilOffset;
+      const leftPupilY = -radius * 0.2 + this.direction.y * pupilOffset;
+      const rightPupilX = radius * 0.3 + this.direction.x * pupilOffset;
+      const rightPupilY = -radius * 0.2 + this.direction.y * pupilOffset;
+      
       ctx.beginPath();
-      ctx.arc(-radius * 0.3, -radius * 0.2, radius * 0.08, 0, Math.PI * 2);
-      ctx.arc(radius * 0.3, -radius * 0.2, radius * 0.08, 0, Math.PI * 2);
+      ctx.arc(leftPupilX, leftPupilY, radius * 0.08, 0, Math.PI * 2);
+      ctx.arc(rightPupilX, rightPupilY, radius * 0.08, 0, Math.PI * 2);
       ctx.fill();
 
       ctx.restore();
@@ -705,7 +748,7 @@
     ghosts.forEach(ghost => {
       if (ghost.spawnTimer > 0) return;
       
-      // Grid-based collision detection
+      // Grid-based collision detection - ghost touches grid value 2 (PACMAN)
       if (ghost.gridX === pacman.gridX && ghost.gridY === pacman.gridY) {
         if (ghost.frightened) {
           // Eat ghost
@@ -715,7 +758,7 @@
           ghost.spawnTimer = 5000;
           playPowerSound();
         } else {
-          // Pac-Man dies
+          // Ghost touches Pac-Man (grid value 2) - minus one life and restart
           loseLife();
         }
       }
@@ -727,16 +770,19 @@
     createParticles(pacman.pixelX, pacman.pixelY, '#FFFF00', 15);
     playDeathSound();
     
+    console.log(`Life lost! Lives remaining: ${game.lives}`); // Debug
+    
     if (game.lives <= 0) {
       gameOver();
     } else {
-      pacman.reset();
-      ghosts.forEach(ghost => {
-        ghost.reset();
-        ghost.spawnTimer = 1000;
-      });
+      // Reset positions and restart
       game.running = false;
       setTimeout(() => {
+        pacman.reset();
+        ghosts.forEach(ghost => {
+          ghost.reset();
+          ghost.spawnTimer = 1000;
+        });
         game.running = true;
       }, 2000);
     }
@@ -764,6 +810,7 @@
     game.gameStarted = false;
     overlay.classList.add('show');
     startBtn.textContent = 'Play Again';
+    console.log('Game Over! Final Score:', game.score); // Debug
   }
 
   function startGame() {
@@ -775,6 +822,7 @@
     game.gameStarted = true;
     resetLevel();
     updateHUD();
+    console.log('Game Started! Lives:', game.lives); // Debug
   }
 
   // Grid-aligned drawing functions
@@ -890,7 +938,7 @@
         ctx.fillText('GAME OVER', canvas.width / 2, canvas.height / 2 - 15);
         ctx.font = '14px Arial';
         ctx.fillStyle = '#FFFFFF';
-        ctx.fillText(`Score: ${game.score}`, canvas.width / 2, canvas.height / 2 + 15);
+        ctx.fillText(`Final Score: ${game.score}`, canvas.width / 2, canvas.height / 2 + 15);
       } else if (game.dotsRemaining <= 0) {
         ctx.fillStyle = '#00FF00';
         ctx.font = 'bold 20px Arial';
@@ -1067,5 +1115,5 @@
   canvas.focus();
   canvas.addEventListener('contextmenu', e => e.preventDefault());
   
-  console.log('Grid-Based Pac-Man with BFS Pathfinding Ready! 🎮🧠');
+  console.log('Smooth Grid-Based Pac-Man Ready! 🎮✨');
 })();
