@@ -295,7 +295,7 @@
       // Check if we can change direction at tile centers
       const centerX = this.gridX * TILE + TILE / 2;
       const centerY = this.gridY * TILE + TILE / 2;
-      const atCenter = Math.abs(this.pixelX - centerX) < 3 && Math.abs(this.pixelY - centerY) < 3;
+      const atCenter = Math.abs(this.pixelX - centerX) < 4 && Math.abs(this.pixelY - centerY) < 4;
 
       if (atCenter && (this.nextDirection.x !== 0 || this.nextDirection.y !== 0)) {
         const nextX = this.gridX + this.nextDirection.x;
@@ -304,19 +304,20 @@
         if (gameGrid.isValidMove(nextX, nextY)) {
           this.direction = {...this.nextDirection};
           this.nextDirection = {x: 0, y: 0};
-          // Snap to center for precise direction change
+          // Snap to exact center for perfect alignment
           this.pixelX = centerX;
           this.pixelY = centerY;
         }
       }
 
-      // Continuous movement
+      // Continuous movement with overflow prevention
       if (this.direction.x !== 0 || this.direction.y !== 0) {
         const newPixelX = this.pixelX + this.direction.x * this.speed * deltaTime;
         const newPixelY = this.pixelY + this.direction.y * this.speed * deltaTime;
         
-        const newGridX = Math.floor(newPixelX / TILE);
-        const newGridY = Math.floor(newPixelY / TILE);
+        // Calculate target grid position
+        const newGridX = Math.round((newPixelX - TILE/2) / TILE);
+        const newGridY = Math.round((newPixelY - TILE/2) / TILE);
 
         // Handle tunnel wrap-around
         let finalPixelX = newPixelX;
@@ -329,17 +330,27 @@
           finalGridX = 0;
         }
 
-        // Check if movement is valid
+        // Check if movement is valid and prevent overflow
         if (gameGrid.isValidMove(finalGridX, newGridY)) {
-          // Update positions
-          this.pixelX = finalPixelX;
-          this.pixelY = newPixelY;
+          // Only move if we're not going to overflow into walls
+          const maxPixelX = finalGridX * TILE + TILE - TILE * 0.15; // Keep 15% margin from wall
+          const minPixelX = finalGridX * TILE + TILE * 0.15;
+          const maxPixelY = newGridY * TILE + TILE - TILE * 0.15;
+          const minPixelY = newGridY * TILE + TILE * 0.15;
+          
+          // Clamp position to stay within corridor bounds
+          this.pixelX = Math.max(minPixelX, Math.min(maxPixelX, finalPixelX));
+          this.pixelY = Math.max(minPixelY, Math.min(maxPixelY, newPixelY));
           
           // Update grid position when crossing tile boundaries
           if (finalGridX !== this.gridX || newGridY !== this.gridY) {
             gameGrid.moveEntity(this.gridX, this.gridY, finalGridX, newGridY, PACMAN);
             this.gridX = finalGridX;
             this.gridY = newGridY;
+            
+            // Snap to corridor center for perfect alignment
+            this.pixelX = this.gridX * TILE + TILE / 2;
+            this.pixelY = this.gridY * TILE + TILE / 2;
             
             // Check for collectibles
             const collected = gameGrid.collectItem(this.gridX, this.gridY);
@@ -365,7 +376,7 @@
             }
           }
         } else {
-          // Hit wall - stop and align to center
+          // Hit wall - stop and align to exact corridor center
           this.pixelX = centerX;
           this.pixelY = centerY;
           this.direction = {x: 0, y: 0};
@@ -475,13 +486,14 @@
         this.calculatePath(pacman);
       }
 
-      // Continuous movement like original Pac-Man
+      // Continuous movement with perfect corridor alignment
       if (this.direction.x !== 0 || this.direction.y !== 0) {
         const newPixelX = this.pixelX + this.direction.x * this.speed * deltaTime;
         const newPixelY = this.pixelY + this.direction.y * this.speed * deltaTime;
         
-        const newGridX = Math.floor(newPixelX / TILE);
-        const newGridY = Math.floor(newPixelY / TILE);
+        // Calculate target grid position
+        const newGridX = Math.round((newPixelX - TILE/2) / TILE);
+        const newGridY = Math.round((newPixelY - TILE/2) / TILE);
 
         // Handle tunnel wrap-around
         let finalPixelX = newPixelX;
@@ -494,20 +506,29 @@
           finalGridX = 0;
         }
 
-        // Check if movement is valid
+        // Check if movement is valid and prevent wall overflow
         if (gameGrid.isValidMove(finalGridX, newGridY)) {
-          // Update positions
-          this.pixelX = finalPixelX;
-          this.pixelY = newPixelY;
+          // Clamp position to stay within corridor bounds
+          const maxPixelX = finalGridX * TILE + TILE - TILE * 0.15;
+          const minPixelX = finalGridX * TILE + TILE * 0.15;
+          const maxPixelY = newGridY * TILE + TILE - TILE * 0.15;
+          const minPixelY = newGridY * TILE + TILE * 0.15;
+          
+          this.pixelX = Math.max(minPixelX, Math.min(maxPixelX, finalPixelX));
+          this.pixelY = Math.max(minPixelY, Math.min(maxPixelY, newPixelY));
           
           // Update grid position when crossing tile boundaries
           if (finalGridX !== this.gridX || newGridY !== this.gridY) {
             gameGrid.moveEntity(this.gridX, this.gridY, finalGridX, newGridY, this.entityType);
             this.gridX = finalGridX;
             this.gridY = newGridY;
+            
+            // Snap to corridor center for perfect visual alignment
+            this.pixelX = this.gridX * TILE + TILE / 2;
+            this.pixelY = this.gridY * TILE + TILE / 2;
           }
         } else {
-          // Hit wall - need new direction
+          // Hit wall - calculate new direction immediately
           this.calculatePath(pacman);
         }
       } else {
