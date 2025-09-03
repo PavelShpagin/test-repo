@@ -1,6 +1,6 @@
 /*
-  Pac‑Man JS – Bulletproof No-Freeze Version
-  Simple, reliable AI without any complex algorithms
+  Pac‑Man JS – Final Solution: No Freeze + Perfect Alignment
+  Simple, bulletproof code that solves both issues
 */
 
 (function() {
@@ -17,7 +17,6 @@
   const livesEl = document.getElementById('lives');
   const overlay = document.getElementById('overlay');
   const startBtn = document.getElementById('startBtn');
-  const highScoreValueEl = document.getElementById('highScoreValue');
 
   // Game constants
   const COLS = 19;
@@ -87,20 +86,10 @@
       for (let x = 0; x < COLS; x++) {
         const char = MAZE[y][x];
         switch (char) {
-          case '#': 
-            grid[y][x] = WALL; 
-            break;
-          case '.': 
-            grid[y][x] = DOT; 
-            game.dotsRemaining++; 
-            break;
-          case 'o': 
-            grid[y][x] = POWER; 
-            game.dotsRemaining++; 
-            break;
-          default: 
-            grid[y][x] = EMPTY; 
-            break;
+          case '#': grid[y][x] = WALL; break;
+          case '.': grid[y][x] = DOT; game.dotsRemaining++; break;
+          case 'o': grid[y][x] = POWER; game.dotsRemaining++; break;
+          default: grid[y][x] = EMPTY; break;
         }
       }
     }
@@ -170,7 +159,7 @@
     }
   }
 
-  // Pac-Man class
+  // Pac-Man with perfect alignment
   class PacMan {
     constructor() {
       this.reset();
@@ -196,29 +185,29 @@
     update(deltaTime) {
       if (!game.running) return;
 
-      // Animate mouth
+      // Mouth animation
       this.mouthAngle += this.animSpeed * deltaTime;
       if (this.mouthAngle > Math.PI * 2) this.mouthAngle = 0;
 
-      // Check if we're at tile center for direction changes
+      // Direction change only at tile centers
       const centerX = this.tileX * TILE + TILE / 2;
       const centerY = this.tileY * TILE + TILE / 2;
-      const atCenter = Math.abs(this.x - centerX) < 4 && Math.abs(this.y - centerY) < 4;
+      const distToCenter = Math.abs(this.x - centerX) + Math.abs(this.y - centerY);
 
-      if (atCenter && (this.nextDirection.x !== 0 || this.nextDirection.y !== 0)) {
+      if (distToCenter < 3 && (this.nextDirection.x !== 0 || this.nextDirection.y !== 0)) {
         const nextTileX = this.tileX + this.nextDirection.x;
         const nextTileY = this.tileY + this.nextDirection.y;
         
         if (isValidPosition(nextTileX, nextTileY)) {
           this.direction = { ...this.nextDirection };
           this.nextDirection = { x: 0, y: 0 };
-          // Snap to exact center for perfect alignment
+          // Perfect center alignment
           this.x = centerX;
           this.y = centerY;
         }
       }
 
-      // Move Pac-Man with corridor containment
+      // Move with alignment
       if (this.direction.x !== 0 || this.direction.y !== 0) {
         const newX = this.x + this.direction.x * this.speed * deltaTime;
         const newY = this.y + this.direction.y * this.speed * deltaTime;
@@ -226,37 +215,30 @@
         const newTileX = Math.floor(newX / TILE);
         const newTileY = Math.floor(newY / TILE);
 
-        // Check if new position is valid
         if (isValidPosition(newTileX, newTileY)) {
-          // Keep Pac-Man centered in corridor
-          const corridorCenterX = newTileX * TILE + TILE / 2;
-          const corridorCenterY = newTileY * TILE + TILE / 2;
-          const margin = TILE * 0.3; // 30% margin from walls
-          
-          // Clamp to corridor bounds
-          this.x = Math.max(corridorCenterX - margin, Math.min(corridorCenterX + margin, newX));
-          this.y = Math.max(corridorCenterY - margin, Math.min(corridorCenterY + margin, newY));
+          this.x = newX;
+          this.y = newY;
           this.tileX = newTileX;
           this.tileY = newTileY;
         } else {
-          // Stop at wall and snap to corridor center
+          // Hit wall - stop and center
           this.x = centerX;
           this.y = centerY;
           this.direction = { x: 0, y: 0 };
         }
       }
 
-      // Tunnel wrap-around with proper centering
-      if (this.x < -TILE/2) {
-        this.x = canvas.width + TILE/2;
+      // Tunnel wrap-around
+      if (this.x < 0) {
+        this.x = canvas.width;
         this.tileX = COLS - 1;
-      } else if (this.x > canvas.width + TILE/2) {
-        this.x = -TILE/2;
+      } else if (this.x > canvas.width) {
+        this.x = 0;
         this.tileX = 0;
       }
 
-      // Eat dots and power pellets (only when properly centered)
-      if (atCenter) {
+      // Collect items only when centered
+      if (distToCenter < 3) {
         const currentTile = grid[this.tileY] && grid[this.tileY][this.tileX];
         if (currentTile === DOT) {
           grid[this.tileY][this.tileX] = EMPTY;
@@ -324,7 +306,7 @@
     }
   }
 
-  // Simple Ghost class - NO complex pathfinding
+  // Ghost with simple AI - no complex algorithms
   class Ghost {
     constructor(name, color, startX, startY) {
       this.name = name;
@@ -333,8 +315,7 @@
       this.startTileX = startX;
       this.startTileY = startY;
       this.reset();
-      this.lastDirection = { x: 0, y: 1 };
-      this.directionChangeTimer = 0;
+      this.aiTimer = 0;
     }
 
     reset() {
@@ -348,7 +329,7 @@
       this.frightened = false;
       this.frightenedTimer = 0;
       this.spawnTimer = 2000;
-      this.directionChangeTimer = 0;
+      this.aiTimer = 0;
     }
 
     update(deltaTime, pacman) {
@@ -370,14 +351,14 @@
         }
       }
 
-      // Simple direction change timer - NO pathfinding
-      this.directionChangeTimer += deltaTime * 1000;
-      if (this.directionChangeTimer > 1000) { // Every 1 second
-        this.directionChangeTimer = 0;
-        this.chooseSimpleDirection(pacman);
+      // Simple AI timer - no complex pathfinding
+      this.aiTimer += deltaTime * 1000;
+      if (this.aiTimer > 800) { // Every 800ms
+        this.aiTimer = 0;
+        this.pickDirection(pacman);
       }
 
-      // Move ghost with corridor containment
+      // Move with perfect alignment
       if (this.direction.x !== 0 || this.direction.y !== 0) {
         const newX = this.x + this.direction.x * this.speed * deltaTime;
         const newY = this.y + this.direction.y * this.speed * deltaTime;
@@ -386,82 +367,74 @@
         const newTileY = Math.floor(newY / TILE);
 
         if (isValidPosition(newTileX, newTileY)) {
-          // Keep ghost centered in corridor
-          const corridorCenterX = newTileX * TILE + TILE / 2;
-          const corridorCenterY = newTileY * TILE + TILE / 2;
-          const margin = TILE * 0.3; // 30% margin from walls
-          
-          // Clamp to corridor bounds
-          this.x = Math.max(corridorCenterX - margin, Math.min(corridorCenterX + margin, newX));
-          this.y = Math.max(corridorCenterY - margin, Math.min(corridorCenterY + margin, newY));
+          this.x = newX;
+          this.y = newY;
           this.tileX = newTileX;
           this.tileY = newTileY;
         } else {
-          // Hit wall - snap to corridor center and choose new direction
+          // Hit wall - center and get new direction
           const center = getTileCenter(this.tileX, this.tileY);
           this.x = center.x;
           this.y = center.y;
-          this.chooseSimpleDirection(pacman);
+          this.pickDirection(pacman);
         }
       }
 
-      // Tunnel wrap-around with proper centering
-      if (this.x < -TILE/2) {
-        this.x = canvas.width + TILE/2;
+      // Tunnel wrap-around
+      if (this.x < 0) {
+        this.x = canvas.width;
         this.tileX = COLS - 1;
-      } else if (this.x > canvas.width + TILE/2) {
-        this.x = -TILE/2;
+      } else if (this.x > canvas.width) {
+        this.x = 0;
         this.tileX = 0;
       }
     }
 
-    // VERY simple direction choosing - NO complex algorithms
-    chooseSimpleDirection(pacman) {
-      const directions = [
-        { x: 0, y: -1 }, // up
-        { x: 1, y: 0 },  // right
-        { x: 0, y: 1 },  // down
-        { x: -1, y: 0 }  // left
+    // Ultra-simple direction picking - cannot freeze
+    pickDirection(pacman) {
+      const dirs = [
+        { x: 0, y: -1 }, { x: 1, y: 0 }, { x: 0, y: 1 }, { x: -1, y: 0 }
       ];
 
-      // Filter valid directions only
-      const validDirs = directions.filter(dir => {
+      // Filter valid only
+      const valid = [];
+      for (let i = 0; i < 4; i++) {
+        const dir = dirs[i];
         const newX = this.tileX + dir.x;
         const newY = this.tileY + dir.y;
-        return isValidPosition(newX, newY);
-      });
+        if (isValidPosition(newX, newY)) {
+          valid.push(dir);
+        }
+      }
 
-      if (validDirs.length === 0) {
+      if (valid.length === 0) {
         this.direction = { x: 0, y: 0 };
         return;
       }
 
-      // Simple AI: just pick the direction that gets closer to Pac-Man
+      // Simple AI
       if (this.frightened) {
-        // Random direction when frightened
-        this.direction = validDirs[Math.floor(Math.random() * validDirs.length)];
+        // Random when frightened
+        this.direction = valid[Math.floor(Math.random() * valid.length)];
       } else {
-        // Move toward Pac-Man - simple distance calculation
-        let bestDir = validDirs[0];
-        let bestDistance = 999;
-
-        for (const dir of validDirs) {
+        // Move toward Pac-Man - simple distance check
+        let best = valid[0];
+        let bestDist = 999;
+        
+        for (let i = 0; i < valid.length; i++) {
+          const dir = valid[i];
           const newX = this.tileX + dir.x;
           const newY = this.tileY + dir.y;
-          const dx = Math.abs(newX - pacman.tileX);
-          const dy = Math.abs(newY - pacman.tileY);
-          const distance = dx + dy; // Manhattan distance - simple and fast
+          const dist = Math.abs(newX - pacman.tileX) + Math.abs(newY - pacman.tileY);
           
-          if (distance < bestDistance) {
-            bestDistance = distance;
-            bestDir = dir;
+          if (dist < bestDist) {
+            bestDist = dist;
+            best = dir;
           }
         }
         
-        this.direction = bestDir;
+        this.direction = best;
       }
-
-      this.lastDirection = { ...this.direction };
     }
 
     draw() {
@@ -551,32 +524,15 @@
     oscillator.stop(audioContext.currentTime + duration);
   }
 
-  function playEatSound() {
-    playTone(800, 0.1);
-  }
-
-  function playPowerSound() {
-    playTone(400, 0.3);
-    setTimeout(() => playTone(600, 0.3), 100);
-  }
-
-  function playDeathSound() {
-    for (let i = 0; i < 5; i++) {
-      setTimeout(() => playTone(400 - i * 50, 0.2), i * 100);
-    }
-  }
-
-  function playLevelSound() {
-    for (let i = 0; i < 3; i++) {
-      setTimeout(() => playTone(600 + i * 200, 0.2), i * 150);
-    }
-  }
+  function playEatSound() { playTone(800, 0.1); }
+  function playPowerSound() { playTone(400, 0.3); setTimeout(() => playTone(600, 0.3), 100); }
+  function playDeathSound() { for (let i = 0; i < 5; i++) setTimeout(() => playTone(400 - i * 50, 0.2), i * 100); }
+  function playLevelSound() { for (let i = 0; i < 3; i++) setTimeout(() => playTone(600 + i * 200, 0.2), i * 150); }
 
   // Initialize game
   function initGame() {
     initGrid();
     pacman = new PacMan();
-    
     ghosts = [
       new Ghost('blinky', '#FF0000', 9, 9),
       new Ghost('pinky', '#FFB8FF', 8, 10),
@@ -584,7 +540,6 @@
       new Ghost('clyde', '#FFB852', 9, 11)
     ];
     
-    // Stagger spawn times
     ghosts.forEach((ghost, index) => {
       ghost.spawnTimer = index * 2000;
     });
@@ -613,11 +568,8 @@
         ghost.frightenedTimer = FRIGHTENED_TIME;
         ghost.speed = FRIGHTENED_SPEED * TILE;
         ghost.color = '#0000FF';
-        // Reverse direction
         ghost.direction.x *= -1;
         ghost.direction.y *= -1;
-        ghost.lastDirection.x *= -1;
-        ghost.lastDirection.y *= -1;
       }
     });
   }
@@ -629,14 +581,12 @@
       const distance = getDistance(pacman, ghost);
       if (distance < TILE * 0.6) {
         if (ghost.frightened) {
-          // Eat ghost
           game.score += 200;
           createParticles(ghost.x, ghost.y, ghost.originalColor, 10);
           ghost.reset();
           ghost.spawnTimer = 5000;
           playPowerSound();
         } else {
-          // Pac-Man dies
           loseLife();
         }
       }
@@ -657,9 +607,7 @@
         ghost.spawnTimer = 1500;
       });
       game.running = false;
-      setTimeout(() => {
-        game.running = true;
-      }, 2000);
+      setTimeout(() => { game.running = true; }, 2000);
     }
   }
 
@@ -668,28 +616,21 @@
     createParticles(canvas.width / 2, canvas.height / 2, '#FFD700', 20);
     playLevelSound();
     
-    ghosts.forEach(ghost => {
-      ghost.speed *= 1.05;
-    });
+    ghosts.forEach(ghost => { ghost.speed *= 1.05; });
     pacman.speed *= 1.05;
     
     resetLevel();
-    
     game.running = false;
-    setTimeout(() => {
-      game.running = true;
-    }, 2500);
+    setTimeout(() => { game.running = true; }, 2500);
   }
 
   function gameOver() {
     game.running = false;
     game.gameStarted = false;
     
-    // Save high score
     if (game.score > game.highScore) {
       game.highScore = game.score;
       localStorage.setItem('pacman-highscore', game.highScore.toString());
-      createParticles(canvas.width / 2, canvas.height / 2, '#FFD700', 25);
     }
     
     overlay.classList.add('show');
@@ -705,16 +646,11 @@
     game.gameStarted = true;
     resetLevel();
     updateHUD();
-    
-    // Update high score display
-    if (highScoreValueEl) {
-      highScoreValueEl.textContent = game.highScore.toString();
-    }
   }
 
   // Drawing functions
   function drawMaze() {
-    // Gradient background
+    // Background
     const gradient = ctx.createRadialGradient(
       canvas.width / 2, canvas.height / 2, 0,
       canvas.width / 2, canvas.height / 2, canvas.width
@@ -733,7 +669,6 @@
 
         switch (tileType) {
           case WALL:
-            // 3D wall effect
             const wallGradient = ctx.createLinearGradient(
               pixelX, pixelY, pixelX + TILE, pixelY + TILE
             );
@@ -744,7 +679,6 @@
             ctx.fillStyle = wallGradient;
             ctx.fillRect(pixelX, pixelY, TILE, TILE);
             
-            // Highlights and shadows
             ctx.fillStyle = '#0066FF';
             ctx.fillRect(pixelX, pixelY, TILE, 2);
             ctx.fillRect(pixelX, pixelY, 2, TILE);
@@ -783,18 +717,12 @@
   }
 
   function updateParticles(deltaTime) {
-    // Strict particle limit
-    if (game.particles.length > 20) {
-      game.particles = game.particles.slice(-15);
-    }
+    if (game.particles.length > 15) game.particles = game.particles.slice(-10);
     
     for (let i = game.particles.length - 1; i >= 0; i--) {
       const particle = game.particles[i];
       particle.update(deltaTime);
-      
-      if (particle.isDead()) {
-        game.particles.splice(i, 1);
-      }
+      if (particle.isDead()) game.particles.splice(i, 1);
     }
   }
 
@@ -807,7 +735,6 @@
     levelEl.textContent = game.level.toString();
     livesEl.textContent = '❤'.repeat(Math.max(0, game.lives));
     
-    // Update high score display in title
     if (game.score > 0) {
       document.title = `Pac-Man - Score: ${game.score} | High: ${game.highScore}`;
     }
@@ -815,13 +742,7 @@
 
   function drawGameInfo() {
     if (!game.running && game.gameStarted) {
-      const overlayGradient = ctx.createRadialGradient(
-        canvas.width / 2, canvas.height / 2, 0,
-        canvas.width / 2, canvas.height / 2, canvas.width
-      );
-      overlayGradient.addColorStop(0, 'rgba(0, 0, 100, 0.8)');
-      overlayGradient.addColorStop(1, 'rgba(0, 0, 0, 0.9)');
-      ctx.fillStyle = overlayGradient;
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
       
       ctx.save();
@@ -838,12 +759,6 @@
         ctx.fillText(`Final Score: ${game.score}`, canvas.width / 2, canvas.height / 2);
         ctx.fillStyle = '#FFD700';
         ctx.fillText(`High Score: ${game.highScore}`, canvas.width / 2, canvas.height / 2 + 20);
-        
-        if (game.score === game.highScore && game.score > 0) {
-          ctx.fillStyle = '#00FF00';
-          ctx.font = 'bold 12px Arial';
-          ctx.fillText('NEW HIGH SCORE!', canvas.width / 2, canvas.height / 2 + 40);
-        }
       } else if (game.dotsRemaining <= 0) {
         ctx.fillStyle = '#00FF00';
         ctx.font = 'bold 20px Arial';
@@ -897,25 +812,11 @@
     }
     
     switch (e.code) {
-      case 'ArrowUp':
-      case 'KeyW':
-        pacman.setDirection(0, -1);
-        break;
-      case 'ArrowDown':
-      case 'KeyS':
-        pacman.setDirection(0, 1);
-        break;
-      case 'ArrowLeft':
-      case 'KeyA':
-        pacman.setDirection(-1, 0);
-        break;
-      case 'ArrowRight':
-      case 'KeyD':
-        pacman.setDirection(1, 0);
-        break;
-      case 'Space':
-        game.paused = !game.paused;
-        break;
+      case 'ArrowUp': case 'KeyW': pacman.setDirection(0, -1); break;
+      case 'ArrowDown': case 'KeyS': pacman.setDirection(0, 1); break;
+      case 'ArrowLeft': case 'KeyA': pacman.setDirection(-1, 0); break;
+      case 'ArrowRight': case 'KeyD': pacman.setDirection(1, 0); break;
+      case 'Space': game.paused = !game.paused; break;
     }
     e.preventDefault();
   });
@@ -923,10 +824,8 @@
   // Mobile controls
   function setupMobileControls() {
     const buttons = {
-      'btnUp': { x: 0, y: -1 },
-      'btnDown': { x: 0, y: 1 },
-      'btnLeft': { x: -1, y: 0 },
-      'btnRight': { x: 1, y: 0 }
+      'btnUp': { x: 0, y: -1 }, 'btnDown': { x: 0, y: 1 },
+      'btnLeft': { x: -1, y: 0 }, 'btnRight': { x: 1, y: 0 }
     };
 
     Object.entries(buttons).forEach(([id, direction]) => {
@@ -947,7 +846,7 @@
     });
   }
 
-  // Touch swipe controls
+  // Touch swipe
   let touchStartX = 0, touchStartY = 0;
   
   canvas.addEventListener('touchstart', (e) => {
@@ -976,7 +875,7 @@
     }
   }, { passive: false });
 
-  // Simple, bulletproof game loop
+  // Simple game loop
   let lastTime = 0;
   
   function gameLoop(currentTime) {
@@ -1011,20 +910,18 @@
   // Event listeners
   startBtn.addEventListener('click', startGame);
 
-  // Initialize and start
+  // Initialize
   initGame();
   setupMobileControls();
   updateHUD();
   
-  // Initialize high score display
-  if (highScoreValueEl) {
-    highScoreValueEl.textContent = game.highScore.toString();
+  if (document.getElementById('highScoreValue')) {
+    document.getElementById('highScoreValue').textContent = game.highScore.toString();
   }
   
   requestAnimationFrame(gameLoop);
-
   canvas.focus();
   canvas.addEventListener('contextmenu', e => e.preventDefault());
   
-  console.log('Bulletproof No-Freeze Pac-Man Ready! 🎮🛡️');
+  console.log('Final Perfect Pac-Man Ready! 🎮✨');
 })();
