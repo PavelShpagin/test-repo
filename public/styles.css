@@ -94,6 +94,10 @@ canvas#game {
   -webkit-user-select: none;
   -moz-user-select: none;
   -ms-user-select: none;
+  width: 56px;
+  height: 56px;
+  display: grid;
+  place-items: center;
 }
 
 .dpad button:active {
