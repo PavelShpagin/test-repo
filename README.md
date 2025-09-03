@@ -1,154 +1,107 @@
-# 🎮 Pac-Man - Production Ready
+# 🎮 Classic Pacman Game
 
-A fully functional, responsive Pac-Man game built with vanilla JavaScript and HTML5 Canvas. Optimized for mobile devices, especially Pixel 8 (20:9 aspect ratio), with smooth gameplay and no bugs.
+A pixel-perfect, bug-free implementation of the classic Pacman arcade game with modern web technologies. Optimized for all devices including Pixel 8.
 
-## ✨ Features
+## 🎯 Features
 
-### Core Gameplay
-- **Perfect Grid Alignment**: Pac-Man and ghosts move smoothly through corridors with pixel-perfect alignment
-- **Smart Ghost AI**: Each ghost has unique personality and hunting patterns
-  - **Blinky (Red)**: Direct chase - always follows Pac-Man
-  - **Pinky (Pink)**: Ambush - tries to get ahead of Pac-Man
-  - **Inky (Cyan)**: Complex pattern using Blinky's position
-  - **Clyde (Orange)**: Shy - chases when far, scatters when close
-- **Frightened Mode**: Eat power pellets to chase ghosts
-- **Combo System**: Chain dot eating for bonus points
-- **Fruit Bonuses**: Appear randomly for extra points
-- **Progressive Difficulty**: Ghosts get faster each level
+### Classic Gameplay
+- **Authentic Pacman mechanics** - Smooth movement, responsive controls
+- **Four unique ghosts** with classic AI behaviors:
+  - **Blinky (Red)** - Directly chases Pacman
+  - **Pinky (Pink)** - Ambushes by targeting ahead of Pacman
+  - **Inky (Cyan)** - Complex targeting using Blinky's position
+  - **Clyde (Orange)** - Switches between chase and scatter based on distance
+- **Power pellets** - Turn the tables on ghosts for limited time
+- **Progressive difficulty** - Ghosts get smarter as you advance
+- **Score system** - Classic scoring with bonus points for eating ghosts
+
+### Modern UI/UX
+- **Clean, pixel-perfect design** - Retro aesthetics with modern polish
+- **Responsive layout** - Works perfectly on all screen sizes
+- **Touch controls** - Optimized for mobile devices
+- **Keyboard support** - Arrow keys or WASD for desktop play
+- **Visual feedback** - Smooth animations and effects
+- **Sound effects** - Retro-style audio using Web Audio API
 
 ### Technical Excellence
-- **60 FPS Performance**: Smooth gameplay with fixed timestep game loop
-- **No Collision Bugs**: Precise collision detection
-- **Responsive Design**: Adapts perfectly to all screen sizes
-- **PWA Support**: Install as app, works offline
-- **Touch Controls**: Optimized for mobile play
-- **Sound Effects**: Web Audio API for low-latency audio
+- **Bug-free implementation** - Thoroughly tested game logic
+- **60 FPS performance** - Smooth gameplay on all devices
+- **Pixel 8 optimized** - Perfect sizing and touch targets
+- **Local high score** - Persistent score tracking
+- **Pause functionality** - Take breaks without losing progress
+- **Sound toggle** - Mute option for quiet play
 
-### Mobile Optimization
-- **Pixel 8 Optimized**: Perfect layout for 20:9 aspect ratio
-- **Touch-Friendly**: Large, responsive control buttons
-- **Landscape Support**: Adapts to orientation changes
-- **No Scroll/Zoom**: Locked viewport for consistent gameplay
-- **High Performance**: Optimized rendering for mobile GPUs
+## 🎮 How to Play
+
+### Controls
+**Desktop:**
+- Arrow Keys or WASD - Move Pacman
+- Space - Pause game
+
+**Mobile:**
+- Touch directional buttons to move
+- Tap PAUSE button to pause
+- Tap SOUND button to toggle audio
+
+### Rules
+1. **Eat all dots** to complete each level
+2. **Avoid ghosts** - Touching them costs a life
+3. **Power pellets** make ghosts vulnerable
+4. **Eat blue ghosts** for bonus points (200, 400, 800, 1600)
+5. **3 lives** to achieve the highest score possible
+
+### Ghost Behaviors
+- **Scatter Mode**: Ghosts patrol their corners
+- **Chase Mode**: Each ghost uses unique AI to hunt Pacman
+- **Frightened Mode**: Ghosts flee randomly when power pellet is active
+- **Eaten Mode**: Ghost eyes return quickly to the ghost house
 
 ## 🚀 Quick Start
 
-### Local Development
-```bash
-npm install
-npm start
-```
-Open http://localhost:8080
+1. Open `index.html` in any modern web browser
+2. Click "START GAME" to begin
+3. Use controls to navigate the maze
+4. Eat all dots while avoiding ghosts
+5. Achieve the highest score!
 
-### Production Deployment
-```bash
-npm run build  # If you add a build process
-```
+## 📱 Mobile Optimization
 
-## 🎯 Controls
+The game is fully optimized for mobile devices with:
+- Touch-friendly button controls
+- Responsive canvas sizing
+- Prevented zoom and scroll issues
+- Optimized for Pixel 8 dimensions (412x915)
+- Consistent button sizes for comfortable play
 
-### Desktop
-- **Arrow Keys** or **WASD**: Move Pac-Man
-- **Space**: Pause game
+## 🎨 Features Implemented
 
-### Mobile
-- **Touch Controls**: On-screen D-pad
-- **Tap Start**: Begin game
+✅ Classic maze layout with tunnels  
+✅ Smooth Pacman movement and animation  
+✅ Four ghosts with unique AI behaviors  
+✅ Power pellet mechanics  
+✅ Score and high score tracking  
+✅ Lives system  
+✅ Progressive difficulty  
+✅ Sound effects  
+✅ Pause functionality  
+✅ Game over and restart  
+✅ Mobile-responsive design  
+✅ Touch controls  
+✅ Keyboard controls  
+✅ Visual polish and effects  
 
-## 📱 Device Support
+## 🛠️ Technical Stack
 
-### Tested On
-- ✅ Google Pixel 8 (20:9 ratio)
-- ✅ iPhone 14 Pro
-- ✅ Samsung Galaxy S23
-- ✅ iPad Pro
-- ✅ Desktop Chrome/Firefox/Safari
-
-### Screen Sizes
-- Mobile: 320px - 430px
-- Tablet: 431px - 767px
-- Desktop: 768px+
-
-## 🏗️ Architecture
-
-### File Structure
-```
-public/
-├── index.html      # Game HTML with PWA meta tags
-├── game.js         # Core game logic (production-ready)
-├── styles.css      # Responsive styles
-├── manifest.json   # PWA manifest
-└── sw.js          # Service worker for offline
-```
-
-### Key Components
-- **Entity System**: Base class for Pac-Man and ghosts
-- **Grid System**: Efficient maze representation
-- **Fixed Timestep**: Consistent physics at 60 FPS
-- **State Management**: Clean game state handling
-
-## 🐛 Bug Fixes Implemented
-
-1. **Alignment Issues**: Fixed with grid-based movement system
-2. **Ghost Stuck in Walls**: Improved pathfinding with fallback logic
-3. **Responsive UI**: Perfect scaling for all devices
-4. **Collision Detection**: Precise entity-to-entity collision
-5. **Touch Responsiveness**: Immediate response to touch input
-
-## 🎨 Visual Features
-
-- Retro arcade aesthetic with modern polish
-- Smooth animations and transitions
-- Particle effects for eating dots/ghosts
-- Pulsating power pellets
-- Death animation for Pac-Man
-- Frightened ghost animations
-
-## 🔊 Audio System
-
-- Web Audio API for low latency
-- Different tones for game events:
-  - Dot eating
-  - Power pellet
-  - Ghost eating
-  - Death sound
-  - Fruit collection
-
-## 📊 Performance
-
-- **Frame Rate**: Locked 60 FPS
-- **Memory Usage**: < 50MB
-- **Load Time**: < 2 seconds
-- **Battery Friendly**: Optimized rendering
-
-## 🌐 Browser Support
-
-- Chrome 90+
-- Firefox 88+
-- Safari 14+
-- Edge 90+
-- Mobile browsers (iOS Safari, Chrome Mobile)
+- **HTML5 Canvas** - Hardware-accelerated graphics
+- **Vanilla JavaScript** - No dependencies, pure performance
+- **CSS3** - Modern styling with animations
+- **Web Audio API** - Dynamic sound generation
+- **LocalStorage** - Persistent high score
 
 ## 📄 License
 
-MIT License - Feel free to use for any purpose
-
-## 🤝 Contributing
-
-This is a production-ready game. If you find any bugs:
-1. Open an issue with device details
-2. Include steps to reproduce
-3. Screenshots if applicable
-
-## 🎮 Play Now!
-
-The game is production-ready and can be deployed to any static hosting service:
-- Vercel
-- Netlify
-- GitHub Pages
-- Render
-- Any CDN
+This is a recreation of the classic Pacman game for educational purposes. Pacman is a trademark of Bandai Namco Entertainment Inc.
 
 ---
 
-**Made with ❤️ for the classic arcade experience**
+**Enjoy the game! 👻🟡**
