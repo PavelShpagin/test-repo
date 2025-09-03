@@ -38,15 +38,15 @@
   const EMPTY = 0;
   const GHOST_SPAWN = 4;
   
-  // Game speeds (tiles per second)
-  const PACMAN_SPEED = 4;
-  const GHOST_SPEED = 3;
-  const FRIGHTENED_SPEED = 2;
+  // Game speeds (tiles per second) - balanced for better gameplay
+  const PACMAN_SPEED = 4.5;
+  const GHOST_SPEED = 3.2;
+  const FRIGHTENED_SPEED = 2.2;
   
-  // Game timers
-  const FRIGHTENED_TIME = 8000; // 8 seconds
-  const GHOST_SPAWN_DELAY = 2000; // 2 seconds between ghost spawns
-  const INVULNERABILITY_TIME = 1000; // 1 second after losing life
+  // Game timers - balanced for better gameplay
+  const FRIGHTENED_TIME = 6000; // 6 seconds (shorter for more challenge)
+  const GHOST_SPAWN_DELAY = 1500; // 1.5 seconds between ghost spawns
+  const INVULNERABILITY_TIME = 1500; // 1.5 seconds after losing life
   
   // Enhanced maze layout with proper ghost spawn area
   const MAZE = [
@@ -86,7 +86,10 @@
     gameStarted: false,
     invulnerable: false,
     invulnerabilityTimer: 0,
-    particles: []
+    particles: [],
+    combo: 0, // For scoring combos
+    lastGhostEaten: 0, // For bonus scoring
+    screenShake: 0 // For screen shake effects
   };
 
   // Unified memory grid for entity management
@@ -232,6 +235,42 @@
     }
   }
 
+  // Score popup for visual feedback
+  class ScorePopup {
+    constructor(x, y, score) {
+      this.x = x;
+      this.y = y;
+      this.score = score;
+      this.life = 1.0;
+      this.decay = 0.015;
+      this.velocity = { x: 0, y: -50 }; // Float upward
+    }
+
+    update(deltaTime) {
+      this.x += this.velocity.x * deltaTime;
+      this.y += this.velocity.y * deltaTime;
+      this.life -= this.decay;
+      this.velocity.y *= 0.98; // Slow down vertical movement
+    }
+
+    draw() {
+      ctx.save();
+      ctx.globalAlpha = this.life;
+      ctx.fillStyle = this.score > 400 ? '#FFD700' : '#FFFFFF';
+      ctx.font = 'bold 14px Arial';
+      ctx.textAlign = 'center';
+      ctx.strokeStyle = '#000000';
+      ctx.lineWidth = 3;
+      ctx.strokeText(this.score.toString(), this.x, this.y);
+      ctx.fillText(this.score.toString(), this.x, this.y);
+      ctx.restore();
+    }
+
+    isDead() {
+      return this.life <= 0;
+    }
+  }
+
   // Enhanced Pac-Man class
   class PacMan {
     constructor() {
@@ -261,8 +300,9 @@
     update(deltaTime) {
       if (!game.running) return;
 
-      // Animate mouth
-      this.mouthAngle += this.animSpeed * deltaTime;
+      // Animate mouth - always animate, but slower when not moving
+      const animSpeedMultiplier = this.moving ? 1 : 0.3;
+      this.mouthAngle += this.animSpeed * deltaTime * animSpeedMultiplier;
       if (this.mouthAngle > Math.PI * 2) this.mouthAngle = 0;
 
       // Update grid position
@@ -345,6 +385,9 @@
         activateFrightenedMode();
         playPowerSound();
         
+        // Screen shake for power pellet
+        game.screenShake = 100;
+        
         if (game.dotsRemaining <= 0) {
           nextLevel();
         }
@@ -390,9 +433,11 @@
       ctx.fillStyle = '#FFFF00';
       ctx.beginPath();
       
-      // Mouth animation - only when moving
-      if (this.moving) {
-        const mouthSize = Math.abs(Math.sin(this.mouthAngle)) * 0.8 + 0.2;
+      // Mouth animation - animate when moving or stationary
+      if (this.moving || (!this.moving && Math.sin(this.mouthAngle) > 0)) {
+        const mouthSize = this.moving ? 
+          Math.abs(Math.sin(this.mouthAngle)) * 0.8 + 0.2 :
+          Math.max(0, Math.sin(this.mouthAngle)) * 0.6 + 0.1;
         const startAngle = mouthSize * 0.5;
         const endAngle = Math.PI * 2 - mouthSize * 0.5;
         ctx.arc(0, 0, this.radius, startAngle, endAngle);
@@ -438,6 +483,8 @@
       this.lastDirection = { x: 0, y: 1 }; // Start moving down
       this.pathfindingCooldown = 0;
       this.targetTile = null;
+      this.directionChangeTimer = 0;
+      this.lastValidPosition = { x: startX, y: startY };
     }
 
     reset() {
@@ -455,6 +502,8 @@
       this.spawnTimer = GHOST_SPAWN_DELAY;
       this.stuck = false;
       this.stuckTimer = 0;
+      this.directionChangeTimer = 0;
+      this.lastValidPosition = { x: this.startTileX, y: this.startTileY };
     }
 
     update(deltaTime, pacman) {
@@ -479,43 +528,78 @@
         }
       }
 
-      // Check if stuck
+      // Update timers
       if (this.stuckTimer > 0) {
         this.stuckTimer -= deltaTime * 1000;
       }
-
-      // Enhanced AI with better pathfinding
-      const atTileCenter = Math.abs(this.x - getTileCenter(this.tileX, this.tileY).x) < 3 &&
-                          Math.abs(this.y - getTileCenter(this.tileX, this.tileY).y) < 3;
-
-      if (atTileCenter || this.direction.x === 0 && this.direction.y === 0) {
-        this.chooseDirection(pacman);
-        // Snap to center when choosing direction
-        const center = getTileCenter(this.tileX, this.tileY);
-        this.x = center.x;
-        this.y = center.y;
+      if (this.directionChangeTimer > 0) {
+        this.directionChangeTimer -= deltaTime * 1000;
       }
 
-      // Move ghost
-      if (this.direction.x !== 0 || this.direction.y !== 0) {
-        const newX = this.x + this.direction.x * this.speed * deltaTime;
-        const newY = this.y + this.direction.y * this.speed * deltaTime;
-        
-        const newTileX = Math.floor(newX / TILE);
-        const newTileY = Math.floor(newY / TILE);
+      // Enhanced AI with better pathfinding and wall avoidance
+      const atTileCenter = Math.abs(this.x - getTileCenter(this.tileX, this.tileY).x) < 2 &&
+                          Math.abs(this.y - getTileCenter(this.tileX, this.tileY).y) < 2;
 
-        if (gameGrid.isValidPosition(newTileX, newTileY)) {
+      if (atTileCenter || this.direction.x === 0 && this.direction.y === 0 || this.directionChangeTimer <= 0) {
+        const newDirection = this.chooseDirection(pacman);
+        if (newDirection) {
+          this.direction = newDirection;
+          this.directionChangeTimer = 200; // Prevent rapid direction changes
+          // Snap to center when choosing direction
+          const center = getTileCenter(this.tileX, this.tileY);
+          this.x = center.x;
+          this.y = center.y;
+        }
+      }
+
+      // Move ghost with improved collision detection
+      if (this.direction.x !== 0 || this.direction.y !== 0) {
+        const moveDistance = this.speed * deltaTime;
+        const newX = this.x + this.direction.x * moveDistance;
+        const newY = this.y + this.direction.y * moveDistance;
+        
+        // Check multiple points around the ghost for collision
+        const checkPoints = [
+          { x: newX, y: newY }, // Center
+          { x: newX - this.radius * 0.8, y: newY }, // Left
+          { x: newX + this.radius * 0.8, y: newY }, // Right
+          { x: newX, y: newY - this.radius * 0.8 }, // Top
+          { x: newX, y: newY + this.radius * 0.8 }  // Bottom
+        ];
+        
+        let canMove = true;
+        for (const point of checkPoints) {
+          const tileX = Math.floor(point.x / TILE);
+          const tileY = Math.floor(point.y / TILE);
+          if (!gameGrid.isValidPosition(tileX, tileY)) {
+            canMove = false;
+            break;
+          }
+        }
+
+        if (canMove) {
           this.x = newX;
           this.y = newY;
+          const newTileX = Math.floor(newX / TILE);
+          const newTileY = Math.floor(newY / TILE);
           this.tileX = newTileX;
           this.tileY = newTileY;
+          this.lastValidPosition = { x: newTileX, y: newTileY };
           this.stuck = false;
           this.stuckTimer = 0;
         } else {
-          // If hitting wall, choose new direction immediately
+          // If hitting wall, stop and force direction change
           this.stuck = true;
-          this.stuckTimer = 500; // 0.5 second cooldown
-          this.chooseDirection(pacman);
+          this.stuckTimer = 100;
+          this.directionChangeTimer = 0; // Force immediate direction change
+          this.direction = { x: 0, y: 0 }; // Stop movement
+          
+          // Snap back to last valid tile center
+          const center = getTileCenter(this.lastValidPosition.x, this.lastValidPosition.y);
+          this.x = center.x;
+          this.y = center.y;
+          this.tileX = this.lastValidPosition.x;
+          this.tileY = this.lastValidPosition.y;
         }
       }
 
@@ -533,7 +617,7 @@
     }
 
     chooseDirection(pacman) {
-      if (this.stuckTimer > 0) return; // Don't change direction while stuck cooldown
+      if (this.stuckTimer > 0 && this.directionChangeTimer > 0) return null; // Don't change direction while stuck cooldown
 
       const directions = [
         { x: 0, y: -1 }, // up
@@ -542,32 +626,57 @@
         { x: -1, y: 0 }  // left
       ];
 
-      // Filter valid directions (no walls, prefer not reversing)
+      // Filter valid directions with better collision checking
       const validDirs = directions.filter(dir => {
         const newX = this.tileX + dir.x;
         const newY = this.tileY + dir.y;
-        return gameGrid.isValidPosition(newX, newY);
+        
+        // Check if position is valid and not too close to walls
+        if (!gameGrid.isValidPosition(newX, newY)) return false;
+        
+        // Additional check: ensure we won't get stuck in corners
+        const futureX = newX + dir.x;
+        const futureY = newY + dir.y;
+        if (gameGrid.isValidPosition(futureX, futureY)) {
+          return true; // Has future movement options
+        }
+        
+        // Check if there are other directions from the next tile
+        const alternativeDirections = directions.filter(altDir => {
+          const altX = newX + altDir.x;
+          const altY = newY + altDir.y;
+          return gameGrid.isValidPosition(altX, altY) && (altDir.x !== -dir.x || altDir.y !== -dir.y);
+        });
+        
+        return alternativeDirections.length > 0;
       });
 
       if (validDirs.length === 0) {
-        // If no valid directions, stay put
-        this.direction = { x: 0, y: 0 };
-        return;
+        // Emergency: try any valid direction to get unstuck
+        const emergencyDirs = directions.filter(dir => {
+          const newX = this.tileX + dir.x;
+          const newY = this.tileY + dir.y;
+          return gameGrid.isValidPosition(newX, newY);
+        });
+        if (emergencyDirs.length > 0) {
+          return emergencyDirs[Math.floor(Math.random() * emergencyDirs.length)];
+        }
+        return null;
       }
 
-      // Remove reverse direction unless it's the only option
+      // Avoid reversing unless necessary or if stuck
       const nonReverseDirs = validDirs.filter(dir => {
         const isReverse = dir.x === -this.lastDirection.x && dir.y === -this.lastDirection.y;
-        return !isReverse;
+        return !isReverse || this.stuck;
       });
 
       const availableDirs = nonReverseDirs.length > 0 ? nonReverseDirs : validDirs;
 
-      // Choose direction based on mode
+      // Choose direction based on mode with improved AI
       let targetDir;
       if (this.frightened) {
-        // Run away from Pac-Man with some randomness
-        if (Math.random() < 0.3) {
+        // Run away from Pac-Man with better avoidance
+        if (Math.random() < 0.4) {
           targetDir = availableDirs[Math.floor(Math.random() * availableDirs.length)];
         } else {
           const pacDist = availableDirs.map(dir => {
@@ -579,9 +688,9 @@
           targetDir = availableDirs[maxDistIndex];
         }
       } else {
-        // Chase Pac-Man with individual ghost personalities
+        // Chase Pac-Man with enhanced individual ghost personalities
         switch (this.name) {
-          case 'blinky': // Direct chase
+          case 'blinky': // Direct aggressive chase
             const pacDist = availableDirs.map(dir => {
               const newX = this.tileX + dir.x;
               const newY = this.tileY + dir.y;
@@ -591,9 +700,10 @@
             targetDir = availableDirs[minDistIndex];
             break;
             
-          case 'pinky': // Ambush - target 4 tiles ahead of Pac-Man
-            const ambushX = pacman.tileX + pacman.direction.x * 4;
-            const ambushY = pacman.tileY + pacman.direction.y * 4;
+          case 'pinky': // Ambush - target ahead of Pac-Man
+            const ambushDistance = 3;
+            const ambushX = pacman.tileX + pacman.direction.x * ambushDistance;
+            const ambushY = pacman.tileY + pacman.direction.y * ambushDistance;
             const ambushDist = availableDirs.map(dir => {
               const newX = this.tileX + dir.x;
               const newY = this.tileY + dir.y;
@@ -603,8 +713,10 @@
             targetDir = availableDirs[minAmbushIndex];
             break;
             
-          case 'inky': // Patrol behavior with some chase
-            if (Math.random() < 0.7) {
+          case 'inky': // Complex behavior: chase when close, patrol when far
+            const inkyDist = getDistance(this, pacman);
+            if (inkyDist < TILE * 6) {
+              // Close to pacman: direct chase
               const chaseDist = availableDirs.map(dir => {
                 const newX = this.tileX + dir.x;
                 const newY = this.tileY + dir.y;
@@ -613,15 +725,32 @@
               const minChaseIndex = chaseDist.indexOf(Math.min(...chaseDist));
               targetDir = availableDirs[minChaseIndex];
             } else {
-              targetDir = availableDirs[Math.floor(Math.random() * availableDirs.length)];
+              // Far from pacman: patrol behavior
+              if (Math.random() < 0.6) {
+                // Prefer continuing in same direction
+                const continueDir = availableDirs.find(dir => 
+                  dir.x === this.lastDirection.x && dir.y === this.lastDirection.y
+                );
+                targetDir = continueDir || availableDirs[Math.floor(Math.random() * availableDirs.length)];
+              } else {
+                targetDir = availableDirs[Math.floor(Math.random() * availableDirs.length)];
+              }
             }
             break;
             
-          case 'clyde': // Keep distance, random when close
+          case 'clyde': // Shy behavior - keeps distance when close
             const clydeDist = getDistance(this, pacman);
-            if (clydeDist < TILE * 8) {
-              targetDir = availableDirs[Math.floor(Math.random() * availableDirs.length)];
+            if (clydeDist < TILE * 7) {
+              // Too close: run away
+              const escapeDist = availableDirs.map(dir => {
+                const newX = this.tileX + dir.x;
+                const newY = this.tileY + dir.y;
+                return getDistance({ x: newX, y: newY }, { x: pacman.tileX, y: pacman.tileY });
+              });
+              const maxEscapeIndex = escapeDist.indexOf(Math.max(...escapeDist));
+              targetDir = availableDirs[maxEscapeIndex];
             } else {
+              // Far enough: chase slowly
               const chaseDist = availableDirs.map(dir => {
                 const newX = this.tileX + dir.x;
                 const newY = this.tileY + dir.y;
@@ -638,19 +767,30 @@
       }
 
       if (targetDir) {
-        this.direction = targetDir;
         this.lastDirection = { ...targetDir };
+        return targetDir;
       }
+      
+      return null;
     }
 
     draw() {
+      // Don't draw if still spawning
+      if (this.spawnTimer > 0) return;
+      
       ctx.save();
       ctx.translate(this.x, this.y);
 
-      // Ghost body with better animation
+      // Ghost body with better animation and glow effect
       const bodyColor = this.frightened ? 
         (this.frightenedTimer < 2000 && Math.floor(Date.now() / 200) % 2 ? '#FFFFFF' : '#0000FF') : 
         this.color;
+      
+      // Add glow effect for frightened ghosts
+      if (this.frightened) {
+        ctx.shadowColor = bodyColor;
+        ctx.shadowBlur = 10;
+      }
         
       ctx.fillStyle = bodyColor;
       ctx.beginPath();
@@ -658,10 +798,10 @@
       
       // Ghost bottom with animated wavy effect
       const waveCount = 4;
-      const waveOffset = Date.now() * 0.01;
+      const waveOffset = Date.now() * 0.008 + (this.name === 'blinky' ? 0 : Math.PI);
       for (let i = 0; i <= waveCount; i++) {
         const waveX = (i / waveCount) * this.radius * 2 - this.radius;
-        const waveY = this.radius * 0.8 + Math.sin(i * Math.PI + waveOffset) * this.radius * 0.15;
+        const waveY = this.radius * 0.8 + Math.sin(i * Math.PI + waveOffset) * this.radius * 0.2;
         if (i === 0) ctx.lineTo(waveX, waveY);
         else ctx.lineTo(waveX, waveY);
       }
@@ -670,29 +810,38 @@
 
       // Add outline
       ctx.strokeStyle = this.frightened ? '#000080' : this.originalColor;
-      ctx.lineWidth = 1;
+      ctx.lineWidth = 2;
       ctx.stroke();
 
-      // Eyes
+      // Reset shadow
+      ctx.shadowBlur = 0;
+
+      // Eyes with better animation
       if (!this.frightened || this.frightenedTimer < 2000) {
         ctx.fillStyle = '#FFFFFF';
         ctx.beginPath();
-        ctx.arc(-this.radius * 0.3, -this.radius * 0.2, this.radius * 0.2, 0, Math.PI * 2);
-        ctx.arc(this.radius * 0.3, -this.radius * 0.2, this.radius * 0.2, 0, Math.PI * 2);
+        ctx.arc(-this.radius * 0.3, -this.radius * 0.3, this.radius * 0.25, 0, Math.PI * 2);
+        ctx.arc(this.radius * 0.3, -this.radius * 0.3, this.radius * 0.25, 0, Math.PI * 2);
         ctx.fill();
 
         // Pupils that look in movement direction
         ctx.fillStyle = '#000000';
-        const pupilOffset = 2;
+        const pupilOffset = 3;
         const leftPupilX = -this.radius * 0.3 + this.direction.x * pupilOffset;
-        const leftPupilY = -this.radius * 0.2 + this.direction.y * pupilOffset;
+        const leftPupilY = -this.radius * 0.3 + this.direction.y * pupilOffset;
         const rightPupilX = this.radius * 0.3 + this.direction.x * pupilOffset;
-        const rightPupilY = -this.radius * 0.2 + this.direction.y * pupilOffset;
+        const rightPupilY = -this.radius * 0.3 + this.direction.y * pupilOffset;
         
         ctx.beginPath();
-        ctx.arc(leftPupilX, leftPupilY, this.radius * 0.1, 0, Math.PI * 2);
-        ctx.arc(rightPupilX, rightPupilY, this.radius * 0.1, 0, Math.PI * 2);
+        ctx.arc(leftPupilX, leftPupilY, this.radius * 0.12, 0, Math.PI * 2);
+        ctx.arc(rightPupilX, rightPupilY, this.radius * 0.12, 0, Math.PI * 2);
         ctx.fill();
+      } else {
+        // Frightened face
+        ctx.fillStyle = '#FFFFFF';
+        ctx.font = `${this.radius}px Arial`;
+        ctx.textAlign = 'center';
+        ctx.fillText('😨', 0, this.radius * 0.2);
       }
 
       ctx.restore();
@@ -761,7 +910,11 @@
   }
 
   function playGhostEatenSound() {
-    playTone(1200, 0.2, 0.1, 'sine');
+    // Enhanced ghost eaten sound with combo effect
+    const baseFreq = 1200;
+    const comboMultiplier = 1 + (game.combo * 0.2);
+    playTone(baseFreq * comboMultiplier, 0.3, 0.12, 'sine');
+    setTimeout(() => playTone(baseFreq * comboMultiplier * 1.5, 0.2, 0.08, 'sine'), 100);
   }
 
   // Initialize game
@@ -787,9 +940,10 @@
       new Ghost('clyde', '#FFB852', ghostSpawnX, ghostSpawnY + 1)  // Orange - keeps distance
     ];
     
-    // Stagger ghost spawn times
+    // Stagger ghost spawn times with more dynamic intervals
+    const spawnDelays = [0, 1000, 2500, 4500]; // Varied timing for more interesting gameplay
     ghosts.forEach((ghost, index) => {
-      ghost.spawnTimer = index * 2000; // 2 second intervals
+      ghost.spawnTimer = spawnDelays[index];
     });
 
     initAudio();
@@ -805,6 +959,8 @@
     game.invulnerable = false;
     game.invulnerabilityTimer = 0;
     game.particles = [];
+    game.combo = 0;
+    game.screenShake = 0;
   }
 
   // Game mechanics
@@ -843,21 +999,32 @@
       
       if (distance < collisionDistance) {
         if (ghost.frightened) {
-          // Eat ghost
-          game.score += 200;
+          // Eat ghost with combo scoring
+          game.combo++;
+          const baseScore = 200;
+          const comboScore = baseScore * Math.pow(2, game.combo - 1);
+          game.score += comboScore;
+          
+          // Screen shake effect
+          game.screenShake = 200;
+          
           ghost.reset();
-          ghost.spawnTimer = 5000; // 5 second respawn
+          ghost.spawnTimer = 4000; // 4 second respawn
           playGhostEatenSound();
           
-          // Create explosion particles
-          for (let i = 0; i < 15; i++) {
-            const angle = (Math.PI * 2 * i) / 15;
+          // Create explosion particles with combo colors
+          const particleColor = game.combo > 2 ? '#FFD700' : ghost.originalColor;
+          for (let i = 0; i < 20; i++) {
+            const angle = (Math.PI * 2 * i) / 20;
             const velocity = {
-              x: Math.cos(angle) * 4,
-              y: Math.sin(angle) * 4
+              x: Math.cos(angle) * (4 + game.combo),
+              y: Math.sin(angle) * (4 + game.combo)
             };
-            game.particles.push(new Particle(ghost.x, ghost.y, ghost.originalColor, velocity));
+            game.particles.push(new Particle(ghost.x, ghost.y, particleColor, velocity));
           }
+          
+          // Add score popup
+          game.particles.push(new ScorePopup(ghost.x, ghost.y, comboScore));
         } else {
           // Pac-Man dies
           loseLife();
@@ -908,17 +1075,27 @@
     game.level++;
     playLevelSound();
     
-    // Increase difficulty
+    // Bonus points for completing level
+    const levelBonus = game.level * 1000;
+    game.score += levelBonus;
+    
+    // Screen shake for level completion
+    game.screenShake = 300;
+    
+    // Increase difficulty progressively
     ghosts.forEach(ghost => {
-      ghost.speed *= 1.08; // 8% faster each level
+      ghost.speed *= 1.06; // 6% faster each level (more balanced)
     });
     
+    // Reduce frightened time slightly each level (max challenge)
+    const newFrightenedTime = Math.max(4000, FRIGHTENED_TIME - (game.level - 1) * 200);
+    
     // Create level completion particles
-    for (let i = 0; i < 30; i++) {
-      const angle = (Math.PI * 2 * i) / 30;
+    for (let i = 0; i < 50; i++) {
+      const angle = (Math.PI * 2 * i) / 50;
       const velocity = {
-        x: Math.cos(angle) * 2,
-        y: Math.sin(angle) * 2
+        x: Math.cos(angle) * 3,
+        y: Math.sin(angle) * 3
       };
       game.particles.push(new Particle(
         canvas.width / 2, 
@@ -928,13 +1105,16 @@
       ));
     }
     
+    // Add level bonus popup
+    game.particles.push(new ScorePopup(canvas.width / 2, canvas.height / 2, levelBonus));
+    
     resetLevel();
     
     // Show level up message briefly
     game.running = false;
     setTimeout(() => {
       game.running = true;
-    }, 2500);
+    }, 3000);
   }
 
   function gameOver() {
@@ -953,6 +1133,8 @@
     game.gameStarted = true;
     game.invulnerable = false;
     game.invulnerabilityTimer = 0;
+    game.combo = 0;
+    game.screenShake = 0;
     resetLevel();
     updateHUD();
   }
@@ -1090,13 +1272,19 @@
       ctx.shadowBlur = 0;
     }
 
-    // Show frightened mode timer
+    // Show frightened mode timer and combo
     if (game.frightenedMode && game.running) {
       const timeLeft = Math.ceil(game.frightenedTimer / 1000);
       ctx.fillStyle = '#0000FF';
       ctx.font = '14px Arial';
       ctx.textAlign = 'center';
       ctx.fillText(`Power Mode: ${timeLeft}s`, canvas.width / 2, 25);
+      
+      if (game.combo > 0) {
+        ctx.fillStyle = '#FFD700';
+        ctx.font = 'bold 16px Arial';
+        ctx.fillText(`Combo x${game.combo}!`, canvas.width / 2, 45);
+      }
     }
   }
 
@@ -1223,7 +1411,14 @@
         game.frightenedTimer -= deltaTime * 1000;
         if (game.frightenedTimer <= 0) {
           game.frightenedMode = false;
+          game.combo = 0; // Reset combo when frightened mode ends
         }
+      }
+
+      // Update screen shake
+      if (game.screenShake > 0) {
+        game.screenShake -= deltaTime * 500;
+        if (game.screenShake < 0) game.screenShake = 0;
       }
 
       // Clear entity positions from grid
@@ -1243,11 +1438,20 @@
       updateHUD();
     }
 
-    // Draw everything
+    // Draw everything with screen shake effect
+    ctx.save();
+    if (game.screenShake > 0) {
+      const shakeX = (Math.random() - 0.5) * game.screenShake * 0.1;
+      const shakeY = (Math.random() - 0.5) * game.screenShake * 0.1;
+      ctx.translate(shakeX, shakeY);
+    }
+    
     drawMaze();
     drawParticles();
     pacman.draw();
     ghosts.forEach(ghost => ghost.draw());
+    
+    ctx.restore();
     drawGameInfo();
     
     requestAnimationFrame(gameLoop);
