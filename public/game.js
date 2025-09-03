@@ -1,6 +1,6 @@
 /*
-  Pac‑Man JS – Fast Linear BFS Implementation
-  Optimized pathfinding with linear time complexity
+  Pac‑Man JS – Bulletproof No-Freeze Version
+  Simple, reliable AI without any complex algorithms
 */
 
 (function() {
@@ -106,76 +106,6 @@
     }
   }
 
-  // Fast linear BFS implementation
-  class FastBFS {
-    constructor() {
-      this.directions = [
-        {x: 0, y: -1}, // up
-        {x: 1, y: 0},  // right  
-        {x: 0, y: 1},  // down
-        {x: -1, y: 0}  // left
-      ];
-      this.visited = new Array(ROWS);
-      for (let i = 0; i < ROWS; i++) {
-        this.visited[i] = new Array(COLS);
-      }
-    }
-
-    findNextMove(startX, startY, targetX, targetY) {
-      // Quick distance check first
-      if (Math.abs(startX - targetX) + Math.abs(startY - targetY) === 1) {
-        return {x: targetX - startX, y: targetY - startY};
-      }
-
-      // Reset visited array efficiently
-      for (let y = 0; y < ROWS; y++) {
-        for (let x = 0; x < COLS; x++) {
-          this.visited[y][x] = false;
-        }
-      }
-
-      const queue = [{x: startX, y: startY, firstMove: null}];
-      this.visited[startY][startX] = true;
-      let queueIndex = 0;
-
-      // Linear BFS with early termination
-      while (queueIndex < queue.length && queueIndex < 100) { // Limit iterations
-        const current = queue[queueIndex++];
-        
-        // Check all 4 directions
-        for (let i = 0; i < 4; i++) {
-          const dir = this.directions[i];
-          const newX = current.x + dir.x;
-          const newY = current.y + dir.y;
-
-          // Bounds check
-          if (newX < 0 || newX >= COLS || newY < 0 || newY >= ROWS) continue;
-          
-          // Wall check
-          if (grid[newY][newX] === WALL) continue;
-          
-          // Already visited check
-          if (this.visited[newY][newX]) continue;
-
-          this.visited[newY][newX] = true;
-          const firstMove = current.firstMove || dir;
-
-          // Found target
-          if (newX === targetX && newY === targetY) {
-            return firstMove;
-          }
-
-          queue.push({x: newX, y: newY, firstMove});
-        }
-      }
-
-      return null; // No path found
-    }
-  }
-
-  // Create BFS instance
-  const fastBFS = new FastBFS();
-
   // Helper functions
   function isValidPosition(x, y) {
     return x >= 0 && y >= 0 && x < COLS && y < ROWS && grid[y][x] !== WALL;
@@ -240,7 +170,7 @@
     }
   }
 
-  // Pac-Man class with perfect alignment
+  // Pac-Man class
   class PacMan {
     constructor() {
       this.reset();
@@ -270,96 +200,66 @@
       this.mouthAngle += this.animSpeed * deltaTime;
       if (this.mouthAngle > Math.PI * 2) this.mouthAngle = 0;
 
-      // Check if we're at tile center for direction changes
-      const centerX = this.tileX * TILE + TILE / 2;
-      const centerY = this.tileY * TILE + TILE / 2;
-      const atCenter = Math.abs(this.x - centerX) < 2 && Math.abs(this.y - centerY) < 2;
-
-      if (atCenter && (this.nextDirection.x !== 0 || this.nextDirection.y !== 0)) {
-        const nextTileX = this.tileX + this.nextDirection.x;
-        const nextTileY = this.tileY + this.nextDirection.y;
-        
+      // Check if we can change direction
+      const nextTileX = this.tileX + this.nextDirection.x;
+      const nextTileY = this.tileY + this.nextDirection.y;
+      
+      if (this.nextDirection.x !== 0 || this.nextDirection.y !== 0) {
         if (isValidPosition(nextTileX, nextTileY)) {
           this.direction = { ...this.nextDirection };
           this.nextDirection = { x: 0, y: 0 };
-          // Snap to exact center for perfect alignment
-          this.x = centerX;
-          this.y = centerY;
         }
       }
 
-      // Move Pac-Man with anti-overshoot
-      if (this.direction.x !== 0 || this.direction.y !== 0) {
-        const newX = this.x + this.direction.x * this.speed * deltaTime;
-        const newY = this.y + this.direction.y * this.speed * deltaTime;
-        
-        // Calculate which tile we're moving into
-        const newTileX = Math.round((newX - TILE/2) / TILE);
-        const newTileY = Math.round((newY - TILE/2) / TILE);
+      // Move Pac-Man
+      const newX = this.x + this.direction.x * this.speed * deltaTime;
+      const newY = this.y + this.direction.y * this.speed * deltaTime;
+      
+      const newTileX = Math.floor(newX / TILE);
+      const newTileY = Math.floor(newY / TILE);
 
-        // Anti-overshoot: check if we're going too far from tile center
-        const targetCenterX = newTileX * TILE + TILE / 2;
-        const targetCenterY = newTileY * TILE + TILE / 2;
-        const maxDistance = TILE * 0.35; // Reduced to 35% for tighter control
-
-        // Clamp position to prevent overshooting
-        let clampedX = newX;
-        let clampedY = newY;
-        
-        if (Math.abs(newX - targetCenterX) > maxDistance) {
-          clampedX = targetCenterX + Math.sign(newX - targetCenterX) * maxDistance;
-        }
-        if (Math.abs(newY - targetCenterY) > maxDistance) {
-          clampedY = targetCenterY + Math.sign(newY - targetCenterY) * maxDistance;
-        }
-
-        // Check if new position is valid
-        if (isValidPosition(newTileX, newTileY)) {
-          this.x = clampedX;
-          this.y = clampedY;
-          this.tileX = newTileX;
-          this.tileY = newTileY;
-        } else {
-          // Stop at wall and center perfectly
-          this.x = centerX;
-          this.y = centerY;
-          this.direction = { x: 0, y: 0 };
-        }
+      // Check if new position is valid
+      if (isValidPosition(newTileX, newTileY)) {
+        this.x = newX;
+        this.y = newY;
+        this.tileX = newTileX;
+        this.tileY = newTileY;
+      } else {
+        // Stop at wall
+        this.direction = { x: 0, y: 0 };
       }
 
-      // Tunnel wrap-around with precise positioning
-      if (this.x < -TILE/2) {
-        this.x = canvas.width + TILE/2;
+      // Tunnel wrap-around
+      if (this.x < 0) {
+        this.x = canvas.width;
         this.tileX = COLS - 1;
-      } else if (this.x > canvas.width + TILE/2) {
-        this.x = -TILE/2;
+      } else if (this.x > canvas.width) {
+        this.x = 0;
         this.tileX = 0;
       }
 
-      // Eat dots and power pellets (only when centered)
-      if (atCenter) {
-        const currentTile = grid[this.tileY] && grid[this.tileY][this.tileX];
-        if (currentTile === DOT) {
-          grid[this.tileY][this.tileX] = EMPTY;
-          game.score += 10;
-          game.dotsRemaining--;
-          createParticles(this.x, this.y, '#FFFF00', 4);
-          playEatSound();
-          
-          if (game.dotsRemaining <= 0) {
-            nextLevel();
-          }
-        } else if (currentTile === POWER) {
-          grid[this.tileY][this.tileX] = EMPTY;
-          game.score += 50;
-          game.dotsRemaining--;
-          createParticles(this.x, this.y, '#FFB8FF', 8);
-          activateFrightenedMode();
-          playPowerSound();
-          
-          if (game.dotsRemaining <= 0) {
-            nextLevel();
-          }
+      // Eat dots and power pellets
+      const currentTile = grid[this.tileY] && grid[this.tileY][this.tileX];
+      if (currentTile === DOT) {
+        grid[this.tileY][this.tileX] = EMPTY;
+        game.score += 10;
+        game.dotsRemaining--;
+        createParticles(this.x, this.y, '#FFFF00', 4);
+        playEatSound();
+        
+        if (game.dotsRemaining <= 0) {
+          nextLevel();
+        }
+      } else if (currentTile === POWER) {
+        grid[this.tileY][this.tileX] = EMPTY;
+        game.score += 50;
+        game.dotsRemaining--;
+        createParticles(this.x, this.y, '#FFB8FF', 8);
+        activateFrightenedMode();
+        playPowerSound();
+        
+        if (game.dotsRemaining <= 0) {
+          nextLevel();
         }
       }
     }
@@ -405,7 +305,7 @@
     }
   }
 
-  // Ghost class with fast BFS pathfinding
+  // Simple Ghost class - NO complex pathfinding
   class Ghost {
     constructor(name, color, startX, startY) {
       this.name = name;
@@ -414,8 +314,8 @@
       this.startTileX = startX;
       this.startTileY = startY;
       this.reset();
-      this.pathfindingTimer = 0;
-      this.pathfindingInterval = 800; // Check path every 800ms
+      this.lastDirection = { x: 0, y: 1 };
+      this.directionChangeTimer = 0;
     }
 
     reset() {
@@ -429,7 +329,7 @@
       this.frightened = false;
       this.frightenedTimer = 0;
       this.spawnTimer = 2000;
-      this.pathfindingTimer = 0;
+      this.directionChangeTimer = 0;
     }
 
     update(deltaTime, pacman) {
@@ -451,120 +351,87 @@
         }
       }
 
-      // Fast pathfinding with linear BFS
-      this.pathfindingTimer += deltaTime * 1000;
-      if (this.pathfindingTimer > this.pathfindingInterval) {
-        this.pathfindingTimer = 0;
-        this.updateDirection(pacman);
+      // Simple direction change timer - NO pathfinding
+      this.directionChangeTimer += deltaTime * 1000;
+      if (this.directionChangeTimer > 1000) { // Every 1 second
+        this.directionChangeTimer = 0;
+        this.chooseSimpleDirection(pacman);
       }
 
-      // Move ghost with anti-overshoot
-      if (this.direction.x !== 0 || this.direction.y !== 0) {
-        const newX = this.x + this.direction.x * this.speed * deltaTime;
-        const newY = this.y + this.direction.y * this.speed * deltaTime;
-        
-        // Calculate which tile we're moving into
-        const newTileX = Math.round((newX - TILE/2) / TILE);
-        const newTileY = Math.round((newY - TILE/2) / TILE);
+      // Move ghost
+      const newX = this.x + this.direction.x * this.speed * deltaTime;
+      const newY = this.y + this.direction.y * this.speed * deltaTime;
+      
+      const newTileX = Math.floor(newX / TILE);
+      const newTileY = Math.floor(newY / TILE);
 
-        // Anti-overshoot: check if we're going too far from tile center
-        const targetCenterX = newTileX * TILE + TILE / 2;
-        const targetCenterY = newTileY * TILE + TILE / 2;
-        const maxDistance = TILE * 0.35; // Tighter control
+      if (isValidPosition(newTileX, newTileY)) {
+        this.x = newX;
+        this.y = newY;
+        this.tileX = newTileX;
+        this.tileY = newTileY;
+      } else {
+        // Hit wall - choose new direction immediately
+        this.chooseSimpleDirection(pacman);
+      }
 
-        // Clamp position to prevent overshooting
-        let clampedX = newX;
-        let clampedY = newY;
-        
-        if (Math.abs(newX - targetCenterX) > maxDistance) {
-          clampedX = targetCenterX + Math.sign(newX - targetCenterX) * maxDistance;
-        }
-        if (Math.abs(newY - targetCenterY) > maxDistance) {
-          clampedY = targetCenterY + Math.sign(newY - targetCenterY) * maxDistance;
-        }
-
-        // Handle tunnel wrap-around
-        let finalX = clampedX;
-        let finalTileX = newTileX;
-        if (clampedX < -TILE/2) {
-          finalX = canvas.width + TILE/2;
-          finalTileX = COLS - 1;
-        } else if (clampedX > canvas.width + TILE/2) {
-          finalX = -TILE/2;
-          finalTileX = 0;
-        }
-
-        if (isValidPosition(finalTileX, newTileY)) {
-          this.x = finalX;
-          this.y = clampedY;
-          this.tileX = finalTileX;
-          this.tileY = newTileY;
-        } else {
-          // Hit wall - center and get new direction
-          const center = getTileCenter(this.tileX, this.tileY);
-          this.x = center.x;
-          this.y = center.y;
-          this.updateDirection(pacman);
-        }
+      // Tunnel wrap-around
+      if (this.x < 0) {
+        this.x = canvas.width;
+        this.tileX = COLS - 1;
+      } else if (this.x > canvas.width) {
+        this.x = 0;
+        this.tileX = 0;
       }
     }
 
-    updateDirection(pacman) {
+    // VERY simple direction choosing - NO complex algorithms
+    chooseSimpleDirection(pacman) {
+      const directions = [
+        { x: 0, y: -1 }, // up
+        { x: 1, y: 0 },  // right
+        { x: 0, y: 1 },  // down
+        { x: -1, y: 0 }  // left
+      ];
+
+      // Filter valid directions only
+      const validDirs = directions.filter(dir => {
+        const newX = this.tileX + dir.x;
+        const newY = this.tileY + dir.y;
+        return isValidPosition(newX, newY);
+      });
+
+      if (validDirs.length === 0) {
+        this.direction = { x: 0, y: 0 };
+        return;
+      }
+
+      // Simple AI: just pick the direction that gets closer to Pac-Man
       if (this.frightened) {
-        // When frightened, move away from Pac-Man
-        const directions = [
-          { x: 0, y: -1 }, { x: 1, y: 0 }, { x: 0, y: 1 }, { x: -1, y: 0 }
-        ];
-        
-        const validDirs = directions.filter(dir => {
+        // Random direction when frightened
+        this.direction = validDirs[Math.floor(Math.random() * validDirs.length)];
+      } else {
+        // Move toward Pac-Man - simple distance calculation
+        let bestDir = validDirs[0];
+        let bestDistance = 999;
+
+        for (const dir of validDirs) {
           const newX = this.tileX + dir.x;
           const newY = this.tileY + dir.y;
-          return isValidPosition(newX, newY);
-        });
-        
-        if (validDirs.length > 0) {
-          // Choose direction that maximizes distance from Pac-Man
-          const distances = validDirs.map(dir => {
-            const newX = this.tileX + dir.x;
-            const newY = this.tileY + dir.y;
-            const dx = newX - pacman.tileX;
-            const dy = newY - pacman.tileY;
-            return dx * dx + dy * dy; // Use squared distance for efficiency
-          });
-          const maxDistIndex = distances.indexOf(Math.max(...distances));
-          this.direction = validDirs[maxDistIndex];
-        }
-      } else {
-        // Use fast linear BFS to chase Pac-Man
-        const nextMove = fastBFS.findNextMove(this.tileX, this.tileY, pacman.tileX, pacman.tileY);
-        
-        if (nextMove) {
-          this.direction = nextMove;
-        } else {
-          // Fallback: move toward Pac-Man directly
-          const directions = [
-            { x: 0, y: -1 }, { x: 1, y: 0 }, { x: 0, y: 1 }, { x: -1, y: 0 }
-          ];
+          const dx = Math.abs(newX - pacman.tileX);
+          const dy = Math.abs(newY - pacman.tileY);
+          const distance = dx + dy; // Manhattan distance - simple and fast
           
-          const validDirs = directions.filter(dir => {
-            const newX = this.tileX + dir.x;
-            const newY = this.tileY + dir.y;
-            return isValidPosition(newX, newY);
-          });
-          
-          if (validDirs.length > 0) {
-            const distances = validDirs.map(dir => {
-              const newX = this.tileX + dir.x;
-              const newY = this.tileY + dir.y;
-              const dx = newX - pacman.tileX;
-              const dy = newY - pacman.tileY;
-              return dx * dx + dy * dy;
-            });
-            const minDistIndex = distances.indexOf(Math.min(...distances));
-            this.direction = validDirs[minDistIndex];
+          if (distance < bestDistance) {
+            bestDistance = distance;
+            bestDir = dir;
           }
         }
+        
+        this.direction = bestDir;
       }
+
+      this.lastDirection = { ...this.direction };
     }
 
     draw() {
@@ -719,6 +586,8 @@
         // Reverse direction
         ghost.direction.x *= -1;
         ghost.direction.y *= -1;
+        ghost.lastDirection.x *= -1;
+        ghost.lastDirection.y *= -1;
       }
     });
   }
@@ -884,9 +753,9 @@
   }
 
   function updateParticles(deltaTime) {
-    // Limit particles to prevent performance issues
-    if (game.particles.length > 25) {
-      game.particles = game.particles.slice(-20);
+    // Strict particle limit
+    if (game.particles.length > 20) {
+      game.particles = game.particles.slice(-15);
     }
     
     for (let i = game.particles.length - 1; i >= 0; i--) {
@@ -1077,14 +946,12 @@
     }
   }, { passive: false });
 
-  // Optimized game loop
+  // Simple, bulletproof game loop
   let lastTime = 0;
-  let frameCount = 0;
   
   function gameLoop(currentTime) {
     const deltaTime = Math.min((currentTime - lastTime) / 1000, 0.016);
     lastTime = currentTime;
-    frameCount++;
 
     if (game.running && !game.paused) {
       if (game.frightenedMode) {
@@ -1129,5 +996,5 @@
   canvas.focus();
   canvas.addEventListener('contextmenu', e => e.preventDefault());
   
-  console.log('Fast Linear BFS Pac-Man Ready! 🎮⚡');
+  console.log('Bulletproof No-Freeze Pac-Man Ready! 🎮🛡️');
 })();
