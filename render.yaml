@@ -1,0 +1,10 @@
+staticSites:
+  - name: pacman-js
+    buildCommand: ""
+    publishPath: public
+    pullRequestPreviewsEnabled: true
+    headers:
+      - path: /*
+        name: Cache-Control
+        value: public, max-age=600
+
