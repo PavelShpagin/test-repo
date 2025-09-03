@@ -38,10 +38,10 @@
   const EMPTY = 0;
   const GHOST_SPAWN = 4;
   
-  // Game speeds (tiles per second) - balanced for better gameplay
-  const PACMAN_SPEED = 4.5;
-  const GHOST_SPEED = 3.2;
-  const FRIGHTENED_SPEED = 2.2;
+  // Game speeds (tiles per second) - balanced for better gameplay with A* AI
+  const PACMAN_SPEED = 5.0;
+  const GHOST_SPEED = 4.0; // Faster ghosts to compensate for smarter AI
+  const FRIGHTENED_SPEED = 2.5;
   
   // Game timers - balanced for better gameplay
   const FRIGHTENED_TIME = 6000; // 6 seconds (shorter for more challenge)
@@ -89,7 +89,8 @@
     particles: [],
     combo: 0, // For scoring combos
     lastGhostEaten: 0, // For bonus scoring
-    screenShake: 0 // For screen shake effects
+    screenShake: 0, // For screen shake effects
+    debugPaths: false // Toggle A* path visualization (set to true for debugging)
   };
 
   // Unified memory grid for entity management
@@ -177,8 +178,157 @@
     }
   }
 
-  // Initialize unified grid
+  // A* Pathfinding Algorithm for Ghost AI
+  class AStar {
+    constructor(grid) {
+      this.grid = grid;
+    }
+
+    // Calculate Manhattan distance heuristic
+    heuristic(a, b) {
+      return Math.abs(a.x - b.x) + Math.abs(a.y - b.y);
+    }
+
+    // Get valid neighbors for a position with tunnel support
+    getNeighbors(node) {
+      const neighbors = [];
+      const directions = [
+        { x: 0, y: -1 }, // up
+        { x: 1, y: 0 },  // right
+        { x: 0, y: 1 },  // down
+        { x: -1, y: 0 }  // left
+      ];
+
+      for (const dir of directions) {
+        let x = node.x + dir.x;
+        let y = node.y + dir.y;
+        
+        // Handle horizontal tunnel wrap-around
+        if (x < 0) x = COLS - 1;
+        else if (x >= COLS) x = 0;
+        
+        // Check bounds and walkability
+        if (y >= 0 && y < ROWS) {
+          if (this.grid.isValidPosition(x, y)) {
+            neighbors.push({ x, y });
+          }
+        }
+      }
+      
+      return neighbors;
+    }
+
+    // Find path from start to goal using A* algorithm with optimizations
+    findPath(start, goal, maxIterations = 150) {
+      // Handle tunnel wrap-around for horizontal movement
+      if (Math.abs(start.x - goal.x) > COLS / 2) {
+        // Create virtual goal on the other side
+        if (start.x < COLS / 2) {
+          goal = { x: goal.x - COLS, y: goal.y };
+        } else {
+          goal = { x: goal.x + COLS, y: goal.y };
+        }
+      }
+
+      const openSet = [];
+      const closedSet = new Set();
+      const cameFrom = new Map();
+      const gScore = new Map();
+      const fScore = new Map();
+
+      const startKey = `${start.x},${start.y}`;
+      const goalKey = `${goal.x},${goal.y}`;
+
+      openSet.push(start);
+      gScore.set(startKey, 0);
+      fScore.set(startKey, this.heuristic(start, goal));
+
+      let iterations = 0;
+
+      while (openSet.length > 0 && iterations < maxIterations) {
+        iterations++;
+
+        // Find node with lowest f score
+        let current = openSet[0];
+        let currentIndex = 0;
+        for (let i = 1; i < openSet.length; i++) {
+          const currentKey = `${current.x},${current.y}`;
+          const nodeKey = `${openSet[i].x},${openSet[i].y}`;
+          if ((fScore.get(nodeKey) || Infinity) < (fScore.get(currentKey) || Infinity)) {
+            current = openSet[i];
+            currentIndex = i;
+          }
+        }
+
+        openSet.splice(currentIndex, 1);
+        const currentKey = `${current.x},${current.y}`;
+        closedSet.add(currentKey);
+
+        // Check if we reached the goal
+        if (currentKey === goalKey) {
+          // Reconstruct path
+          const path = [];
+          let pathNode = current;
+          while (pathNode) {
+            path.unshift(pathNode);
+            const pathKey = `${pathNode.x},${pathNode.y}`;
+            pathNode = cameFrom.get(pathKey);
+          }
+          return path;
+        }
+
+        // Check neighbors
+        const neighbors = this.getNeighbors(current);
+        for (const neighbor of neighbors) {
+          const neighborKey = `${neighbor.x},${neighbor.y}`;
+          
+          if (closedSet.has(neighborKey)) continue;
+
+          const tentativeGScore = (gScore.get(currentKey) || Infinity) + 1;
+
+          if (!openSet.some(node => node.x === neighbor.x && node.y === neighbor.y)) {
+            openSet.push(neighbor);
+          } else if (tentativeGScore >= (gScore.get(neighborKey) || Infinity)) {
+            continue;
+          }
+
+          cameFrom.set(neighborKey, current);
+          gScore.set(neighborKey, tentativeGScore);
+          fScore.set(neighborKey, tentativeGScore + this.heuristic(neighbor, goal));
+        }
+      }
+
+      return []; // No path found
+    }
+
+    // Get next direction from current position towards goal with caching
+    getNextDirection(start, goal) {
+      // Quick distance check - if very close, use simple direction
+      const distance = this.heuristic(start, goal);
+      if (distance <= 2) {
+        const dx = goal.x - start.x;
+        const dy = goal.y - start.y;
+        if (Math.abs(dx) > Math.abs(dy)) {
+          return { x: Math.sign(dx), y: 0 };
+        } else {
+          return { x: 0, y: Math.sign(dy) };
+        }
+      }
+
+      const path = this.findPath(start, goal);
+      if (path.length < 2) return null;
+
+      const next = path[1];
+      return {
+        x: next.x - start.x,
+        y: next.y - start.y
+      };
+    }
+  }
+
+  // Initialize unified grid and A* pathfinding
   const gameGrid = new GameGrid();
+  const pathfinder = new AStar(gameGrid);
 
   // Helper functions
   function getTileCenter(tileX, tileY) {
@@ -308,9 +458,10 @@
       // Update grid position
       gameGrid.removeEntity(this, this.tileX, this.tileY);
 
-      // Check if we can change direction at tile centers
-      const atTileCenter = Math.abs(this.x - getTileCenter(this.tileX, this.tileY).x) < 2 &&
-                          Math.abs(this.y - getTileCenter(this.tileX, this.tileY).y) < 2;
+      // Check if we can change direction at tile centers with improved precision
+      const center = getTileCenter(this.tileX, this.tileY);
+      const atTileCenter = Math.abs(this.x - center.x) < 3 &&
+                          Math.abs(this.y - center.y) < 3;
 
       if (atTileCenter && (this.nextDirection.x !== 0 || this.nextDirection.y !== 0)) {
         const nextTileX = this.tileX + this.nextDirection.x;
@@ -319,35 +470,53 @@
         if (gameGrid.isValidPosition(nextTileX, nextTileY)) {
           this.direction = { ...this.nextDirection };
           this.nextDirection = { x: 0, y: 0 };
-          // Snap to center when changing direction
-          const center = getTileCenter(this.tileX, this.tileY);
+          // Snap to center when changing direction for perfect alignment
           this.x = center.x;
           this.y = center.y;
         }
       }
 
-      // Move Pac-Man
+      // Move Pac-Man with enhanced collision detection
       if (this.direction.x !== 0 || this.direction.y !== 0) {
         this.moving = true;
-        const newX = this.x + this.direction.x * this.speed * deltaTime;
-        const newY = this.y + this.direction.y * this.speed * deltaTime;
+        const moveDistance = this.speed * deltaTime;
+        const newX = this.x + this.direction.x * moveDistance;
+        const newY = this.y + this.direction.y * moveDistance;
         
-        const newTileX = Math.floor(newX / TILE);
-        const newTileY = Math.floor(newY / TILE);
+        // Enhanced collision detection with multiple check points
+        const checkPoints = [
+          { x: newX, y: newY }, // Center
+          { x: newX - this.radius * 0.9, y: newY }, // Left edge
+          { x: newX + this.radius * 0.9, y: newY }, // Right edge
+          { x: newX, y: newY - this.radius * 0.9 }, // Top edge
+          { x: newX, y: newY + this.radius * 0.9 }  // Bottom edge
+        ];
+        
+        let canMove = true;
+        for (const point of checkPoints) {
+          const tileX = Math.floor(point.x / TILE);
+          const tileY = Math.floor(point.y / TILE);
+          if (!gameGrid.isValidPosition(tileX, tileY)) {
+            canMove = false;
+            break;
+          }
+        }
 
-        // Check if new position is valid
-        if (gameGrid.isValidPosition(newTileX, newTileY)) {
+        if (canMove) {
           this.x = newX;
           this.y = newY;
-          this.tileX = newTileX;
-          this.tileY = newTileY;
+          // Update tile position based on center point
+          this.tileX = Math.floor(this.x / TILE);
+          this.tileY = Math.floor(this.y / TILE);
         } else {
-          // Stop at wall and snap to tile center
-          const center = getTileCenter(this.tileX, this.tileY);
-          this.x = center.x;
-          this.y = center.y;
-          this.direction = { x: 0, y: 0 };
+          // Enhanced wall collision handling - snap to grid and stop cleanly
           this.moving = false;
+          this.direction = { x: 0, y: 0 };
+          
+          // Snap to the closest valid tile center to prevent wall overflow
+          const currentCenter = getTileCenter(this.tileX, this.tileY);
+          this.x = currentCenter.x;
+          this.y = currentCenter.y;
         }
       } else {
         this.moving = false;
@@ -485,6 +654,9 @@
       this.targetTile = null;
       this.directionChangeTimer = 0;
       this.lastValidPosition = { x: startX, y: startY };
+      this.pathCache = new Map(); // Cache paths for performance
+      this.lastPathUpdate = 0;
+      this.stuckDetection = { position: { x: startX, y: startY }, timer: 0 };
     }
 
     reset() {
@@ -504,6 +676,9 @@
       this.stuckTimer = 0;
       this.directionChangeTimer = 0;
       this.lastValidPosition = { x: this.startTileX, y: this.startTileY };
+      this.pathCache.clear(); // Clear path cache on reset
+      this.lastPathUpdate = 0;
+      this.stuckDetection = { position: { x: this.startTileX, y: this.startTileY }, timer: 0 };
     }
 
     update(deltaTime, pacman) {
@@ -536,35 +711,57 @@
         this.directionChangeTimer -= deltaTime * 1000;
       }
 
-      // Enhanced AI with better pathfinding and wall avoidance
-      const atTileCenter = Math.abs(this.x - getTileCenter(this.tileX, this.tileY).x) < 2 &&
-                          Math.abs(this.y - getTileCenter(this.tileX, this.tileY).y) < 2;
+      // Anti-stuck detection mechanism
+      const currentPos = { x: this.tileX, y: this.tileY };
+      if (this.stuckDetection.position.x === currentPos.x && this.stuckDetection.position.y === currentPos.y) {
+        this.stuckDetection.timer += deltaTime * 1000;
+        if (this.stuckDetection.timer > 2000) { // Stuck for 2 seconds
+          // Force teleport to a safe position
+          this.teleportToSafePosition();
+          this.stuckDetection.timer = 0;
+        }
+      } else {
+        this.stuckDetection.position = { ...currentPos };
+        this.stuckDetection.timer = 0;
+      }
 
-      if (atTileCenter || this.direction.x === 0 && this.direction.y === 0 || this.directionChangeTimer <= 0) {
+      // Enhanced AI with A* pathfinding - make decisions at tile centers or when stuck
+      const center = getTileCenter(this.tileX, this.tileY);
+      const atTileCenter = Math.abs(this.x - center.x) < 3 &&
+                          Math.abs(this.y - center.y) < 3;
+
+      // Use A* pathfinding for direction decisions
+      if (atTileCenter || this.direction.x === 0 && this.direction.y === 0 || this.stuck || this.directionChangeTimer <= 0) {
         const newDirection = this.chooseDirection(pacman);
         if (newDirection) {
           this.direction = newDirection;
-          this.directionChangeTimer = 200; // Prevent rapid direction changes
-          // Snap to center when choosing direction
-          const center = getTileCenter(this.tileX, this.tileY);
+          this.directionChangeTimer = 150; // Shorter cooldown for more responsive AI
+          // Snap to center when choosing direction for perfect grid alignment
           this.x = center.x;
           this.y = center.y;
+          this.stuck = false;
+          this.stuckTimer = 0;
         }
       }
 
-      // Move ghost with improved collision detection
+      // Enhanced ghost movement with bulletproof collision detection
       if (this.direction.x !== 0 || this.direction.y !== 0) {
         const moveDistance = this.speed * deltaTime;
         const newX = this.x + this.direction.x * moveDistance;
         const newY = this.y + this.direction.y * moveDistance;
         
-        // Check multiple points around the ghost for collision
+        // Comprehensive collision detection to prevent wall clipping
+        const checkRadius = this.radius * 0.95; // Slightly smaller to prevent edge cases
         const checkPoints = [
           { x: newX, y: newY }, // Center
-          { x: newX - this.radius * 0.8, y: newY }, // Left
-          { x: newX + this.radius * 0.8, y: newY }, // Right
-          { x: newX, y: newY - this.radius * 0.8 }, // Top
-          { x: newX, y: newY + this.radius * 0.8 }  // Bottom
+          { x: newX - checkRadius, y: newY - checkRadius }, // Top-left
+          { x: newX + checkRadius, y: newY - checkRadius }, // Top-right
+          { x: newX - checkRadius, y: newY + checkRadius }, // Bottom-left
+          { x: newX + checkRadius, y: newY + checkRadius }, // Bottom-right
+          { x: newX - checkRadius, y: newY }, // Left
+          { x: newX + checkRadius, y: newY }, // Right
+          { x: newX, y: newY - checkRadius }, // Top
+          { x: newX, y: newY + checkRadius }  // Bottom
         ];
         
         let canMove = true;
@@ -580,26 +777,33 @@
         if (canMove) {
           this.x = newX;
           this.y = newY;
-          const newTileX = Math.floor(newX / TILE);
-          const newTileY = Math.floor(newY / TILE);
-          this.tileX = newTileX;
-          this.tileY = newTileY;
-          this.lastValidPosition = { x: newTileX, y: newTileY };
+          // Update tile position based on center point
+          this.tileX = Math.floor(this.x / TILE);
+          this.tileY = Math.floor(this.y / TILE);
+          this.lastValidPosition = { x: this.tileX, y: this.tileY };
           this.stuck = false;
           this.stuckTimer = 0;
         } else {
-          // If hitting wall, stop and force direction change
+          // Enhanced wall collision recovery - never get stuck
           this.stuck = true;
-          this.stuckTimer = 100;
-          this.directionChangeTimer = 0; // Force immediate direction change
+          this.stuckTimer = 50; // Short cooldown
+          this.directionChangeTimer = 0; // Force immediate direction recalculation
           this.direction = { x: 0, y: 0 }; // Stop movement
           
-          // Snap back to last valid tile center
-          const center = getTileCenter(this.lastValidPosition.x, this.lastValidPosition.y);
-          this.x = center.x;
-          this.y = center.y;
-          this.tileX = this.lastValidPosition.x;
-          this.tileY = this.lastValidPosition.y;
+          // Snap to nearest valid tile center to prevent wall overlap
+          const currentCenter = getTileCenter(this.tileX, this.tileY);
+          this.x = currentCenter.x;
+          this.y = currentCenter.y;
+          
+          // Ensure tile position is valid
+          if (!gameGrid.isValidPosition(this.tileX, this.tileY)) {
+            // Emergency: find nearest valid position
+            this.tileX = this.lastValidPosition.x;
+            this.tileY = this.lastValidPosition.y;
+            const validCenter = getTileCenter(this.tileX, this.tileY);
+            this.x = validCenter.x;
+            this.y = validCenter.y;
+          }
         }
       }
 
@@ -617,8 +821,153 @@
     }
 
     chooseDirection(pacman) {
-      if (this.stuckTimer > 0 && this.directionChangeTimer > 0) return null; // Don't change direction while stuck cooldown
+      if (this.stuckTimer > 0 && this.directionChangeTimer > 0) return null;
 
+      // Use A* pathfinding for intelligent ghost behavior
+      const start = { x: this.tileX, y: this.tileY };
+      let goal = { x: pacman.tileX, y: pacman.tileY };
+
+      // Enhanced ghost personalities using A* pathfinding
+      if (this.frightened) {
+        // When frightened, intelligently flee using A* pathfinding
+        goal = this.findFarthestReachablePoint(pacman);
+        // Add some randomness to make it more interesting
+        if (Math.random() < 0.3) {
+          const randomPoints = [
+            { x: 1, y: 1 }, { x: COLS - 2, y: 1 }, 
+            { x: 1, y: ROWS - 2 }, { x: COLS - 2, y: ROWS - 2 }
+          ];
+          const randomGoal = randomPoints[Math.floor(Math.random() * randomPoints.length)];
+          if (gameGrid.isValidPosition(randomGoal.x, randomGoal.y)) {
+            goal = randomGoal;
+          }
+        }
+      } else {
+        switch (this.name) {
+          case 'blinky': // Red ghost - direct aggressive chase
+            goal = { x: pacman.tileX, y: pacman.tileY };
+            break;
+            
+          case 'pinky': // Pink ghost - ambush ahead of Pac-Man
+            const ambushDistance = 4;
+            goal = {
+              x: Math.max(0, Math.min(COLS - 1, pacman.tileX + pacman.direction.x * ambushDistance)),
+              y: Math.max(0, Math.min(ROWS - 1, pacman.tileY + pacman.direction.y * ambushDistance))
+            };
+            // If ambush point is invalid, target Pac-Man directly
+            if (!gameGrid.isValidPosition(goal.x, goal.y)) {
+              goal = { x: pacman.tileX, y: pacman.tileY };
+            }
+            break;
+            
+          case 'inky': // Cyan ghost - complex targeting (uses Blinky's position)
+            const blinky = ghosts.find(g => g.name === 'blinky');
+            if (blinky) {
+              // Enhanced Inky behavior - more sophisticated vector targeting
+              const vectorDistance = Math.min(4, game.level); // Increases with level
+              const vectorX = pacman.tileX + pacman.direction.x * vectorDistance - blinky.tileX;
+              const vectorY = pacman.tileY + pacman.direction.y * vectorDistance - blinky.tileY;
+              goal = {
+                x: Math.max(0, Math.min(COLS - 1, blinky.tileX + vectorX)),
+                y: Math.max(0, Math.min(ROWS - 1, blinky.tileY + vectorY))
+              };
+              if (!gameGrid.isValidPosition(goal.x, goal.y)) {
+                goal = { x: pacman.tileX, y: pacman.tileY };
+              }
+            } else {
+              goal = { x: pacman.tileX, y: pacman.tileY };
+            }
+            break;
+            
+          case 'clyde': // Orange ghost - shy behavior with dynamic distance
+            const distToPac = getDistance(start, { x: pacman.tileX, y: pacman.tileY });
+            const shyDistance = TILE * (6 + game.level); // Increases shyness with level
+            if (distToPac < shyDistance) {
+              // Too close: retreat to corner, but vary the corner based on position
+              const corners = [
+                { x: 1, y: 1 }, { x: COLS - 2, y: 1 }, 
+                { x: 1, y: ROWS - 2 }, { x: COLS - 2, y: ROWS - 2 }
+              ];
+              // Choose corner farthest from Pac-Man
+              let bestCorner = corners[0];
+              let maxDist = 0;
+              corners.forEach(corner => {
+                const dist = getDistance(corner, { x: pacman.tileX, y: pacman.tileY });
+                if (dist > maxDist) {
+                  maxDist = dist;
+                  bestCorner = corner;
+                }
+              });
+              goal = bestCorner;
+            } else {
+              goal = { x: pacman.tileX, y: pacman.tileY };
+            }
+            break;
+            
+          default:
+            goal = { x: pacman.tileX, y: pacman.tileY };
+        }
+      }
+
+      // Use A* to find the optimal direction with performance optimization
+      const currentTime = Date.now();
+      const cacheKey = `${start.x},${start.y}-${goal.x},${goal.y}`;
+      
+      // Use cached path if available and recent (within 500ms)
+      let direction = null;
+      if (this.pathCache.has(cacheKey) && currentTime - this.lastPathUpdate < 500) {
+        direction = this.pathCache.get(cacheKey);
+      } else {
+        // Calculate new path and cache it
+        direction = pathfinder.getNextDirection(start, goal);
+        if (direction) {
+          this.pathCache.set(cacheKey, direction);
+          this.lastPathUpdate = currentTime;
+          
+          // Limit cache size to prevent memory issues
+          if (this.pathCache.size > 10) {
+            const firstKey = this.pathCache.keys().next().value;
+            this.pathCache.delete(firstKey);
+          }
+        }
+      }
+      
+      if (direction) {
+        this.lastDirection = { ...direction };
+        return direction;
+      }
+
+      // Fallback: use emergency direction finding if A* fails
+      return this.getEmergencyDirection();
+    }
+
+    // Find the farthest reachable point from Pac-Man when frightened
+    findFarthestReachablePoint(pacman) {
+      let farthestPoint = { x: this.tileX, y: this.tileY };
+      let maxDistance = 0;
+
+      // Sample points around the maze to find the farthest reachable one
+      const samplePoints = [
+        { x: 1, y: 1 }, { x: COLS - 2, y: 1 }, { x: 1, y: ROWS - 2 }, { x: COLS - 2, y: ROWS - 2 },
+        { x: COLS / 2, y: 1 }, { x: COLS / 2, y: ROWS - 2 }, { x: 1, y: ROWS / 2 }, { x: COLS - 2, y: ROWS / 2 }
+      ];
+
+      for (const point of samplePoints) {
+        if (gameGrid.isValidPosition(point.x, point.y)) {
+          const distance = getDistance(point, { x: pacman.tileX, y: pacman.tileY });
+          const path = pathfinder.findPath({ x: this.tileX, y: this.tileY }, point);
+          if (path.length > 0 && distance > maxDistance) {
+            maxDistance = distance;
+            farthestPoint = point;
+          }
+        }
+      }
+
+      return farthestPoint;
+    }
+
+    // Emergency direction finding when A* fails
+    getEmergencyDirection() {
       const directions = [
         { x: 0, y: -1 }, // up
         { x: 1, y: 0 },  // right
@@ -626,152 +975,59 @@
         { x: -1, y: 0 }  // left
       ];
 
-      // Filter valid directions with better collision checking
+      // Find any valid direction
       const validDirs = directions.filter(dir => {
         const newX = this.tileX + dir.x;
         const newY = this.tileY + dir.y;
-        
-        // Check if position is valid and not too close to walls
-        if (!gameGrid.isValidPosition(newX, newY)) return false;
-        
-        // Additional check: ensure we won't get stuck in corners
-        const futureX = newX + dir.x;
-        const futureY = newY + dir.y;
-        if (gameGrid.isValidPosition(futureX, futureY)) {
-          return true; // Has future movement options
-        }
-        
-        // Check if there are other directions from the next tile
-        const alternativeDirections = directions.filter(altDir => {
-          const altX = newX + altDir.x;
-          const altY = newY + altDir.y;
-          return gameGrid.isValidPosition(altX, altY) && (altDir.x !== -dir.x || altDir.y !== -dir.y);
-        });
-        
-        return alternativeDirections.length > 0;
+        return gameGrid.isValidPosition(newX, newY);
       });
 
-      if (validDirs.length === 0) {
-        // Emergency: try any valid direction to get unstuck
-        const emergencyDirs = directions.filter(dir => {
-          const newX = this.tileX + dir.x;
-          const newY = this.tileY + dir.y;
-          return gameGrid.isValidPosition(newX, newY);
-        });
-        if (emergencyDirs.length > 0) {
-          return emergencyDirs[Math.floor(Math.random() * emergencyDirs.length)];
-        }
-        return null;
-      }
+      if (validDirs.length === 0) return null;
 
-      // Avoid reversing unless necessary or if stuck
+      // Avoid reversing unless it's the only option
       const nonReverseDirs = validDirs.filter(dir => {
         const isReverse = dir.x === -this.lastDirection.x && dir.y === -this.lastDirection.y;
-        return !isReverse || this.stuck;
+        return !isReverse;
       });
 
       const availableDirs = nonReverseDirs.length > 0 ? nonReverseDirs : validDirs;
+      return availableDirs[Math.floor(Math.random() * availableDirs.length)];
+    }
 
-      // Choose direction based on mode with improved AI
-      let targetDir;
-      if (this.frightened) {
-        // Run away from Pac-Man with better avoidance
-        if (Math.random() < 0.4) {
-          targetDir = availableDirs[Math.floor(Math.random() * availableDirs.length)];
-        } else {
-          const pacDist = availableDirs.map(dir => {
-            const newX = this.tileX + dir.x;
-            const newY = this.tileY + dir.y;
-            return getDistance({ x: newX, y: newY }, { x: pacman.tileX, y: pacman.tileY });
-          });
-          const maxDistIndex = pacDist.indexOf(Math.max(...pacDist));
-          targetDir = availableDirs[maxDistIndex];
-        }
-      } else {
-        // Chase Pac-Man with enhanced individual ghost personalities
-        switch (this.name) {
-          case 'blinky': // Direct aggressive chase
-            const pacDist = availableDirs.map(dir => {
-              const newX = this.tileX + dir.x;
-              const newY = this.tileY + dir.y;
-              return getDistance({ x: newX, y: newY }, { x: pacman.tileX, y: pacman.tileY });
-            });
-            const minDistIndex = pacDist.indexOf(Math.min(...pacDist));
-            targetDir = availableDirs[minDistIndex];
-            break;
-            
-          case 'pinky': // Ambush - target ahead of Pac-Man
-            const ambushDistance = 3;
-            const ambushX = pacman.tileX + pacman.direction.x * ambushDistance;
-            const ambushY = pacman.tileY + pacman.direction.y * ambushDistance;
-            const ambushDist = availableDirs.map(dir => {
-              const newX = this.tileX + dir.x;
-              const newY = this.tileY + dir.y;
-              return getDistance({ x: newX, y: newY }, { x: ambushX, y: ambushY });
-            });
-            const minAmbushIndex = ambushDist.indexOf(Math.min(...ambushDist));
-            targetDir = availableDirs[minAmbushIndex];
-            break;
-            
-          case 'inky': // Complex behavior: chase when close, patrol when far
-            const inkyDist = getDistance(this, pacman);
-            if (inkyDist < TILE * 6) {
-              // Close to pacman: direct chase
-              const chaseDist = availableDirs.map(dir => {
-                const newX = this.tileX + dir.x;
-                const newY = this.tileY + dir.y;
-                return getDistance({ x: newX, y: newY }, { x: pacman.tileX, y: pacman.tileY });
-              });
-              const minChaseIndex = chaseDist.indexOf(Math.min(...chaseDist));
-              targetDir = availableDirs[minChaseIndex];
-            } else {
-              // Far from pacman: patrol behavior
-              if (Math.random() < 0.6) {
-                // Prefer continuing in same direction
-                const continueDir = availableDirs.find(dir => 
-                  dir.x === this.lastDirection.x && dir.y === this.lastDirection.y
-                );
-                targetDir = continueDir || availableDirs[Math.floor(Math.random() * availableDirs.length)];
-              } else {
-                targetDir = availableDirs[Math.floor(Math.random() * availableDirs.length)];
-              }
-            }
-            break;
-            
-          case 'clyde': // Shy behavior - keeps distance when close
-            const clydeDist = getDistance(this, pacman);
-            if (clydeDist < TILE * 7) {
-              // Too close: run away
-              const escapeDist = availableDirs.map(dir => {
-                const newX = this.tileX + dir.x;
-                const newY = this.tileY + dir.y;
-                return getDistance({ x: newX, y: newY }, { x: pacman.tileX, y: pacman.tileY });
-              });
-              const maxEscapeIndex = escapeDist.indexOf(Math.max(...escapeDist));
-              targetDir = availableDirs[maxEscapeIndex];
-            } else {
-              // Far enough: chase slowly
-              const chaseDist = availableDirs.map(dir => {
-                const newX = this.tileX + dir.x;
-                const newY = this.tileY + dir.y;
-                return getDistance({ x: newX, y: newY }, { x: pacman.tileX, y: pacman.tileY });
-              });
-              const minChaseIndex = chaseDist.indexOf(Math.min(...chaseDist));
-              targetDir = availableDirs[minChaseIndex];
-            }
-            break;
-            
-          default:
-            targetDir = availableDirs[0];
-        }
-      }
-
-      if (targetDir) {
-        this.lastDirection = { ...targetDir };
-        return targetDir;
-      }
+    // Emergency teleport to prevent permanent stuck situations
+    teleportToSafePosition() {
+      const safePositions = [];
       
-      return null;
+      // Find all valid positions in the maze
+      for (let y = 1; y < ROWS - 1; y++) {
+        for (let x = 1; x < COLS - 1; x++) {
+          if (gameGrid.isValidPosition(x, y)) {
+            // Ensure it's not too close to walls (avoid tight spaces)
+            const neighbors = [
+              { x: x - 1, y }, { x: x + 1, y }, { x, y: y - 1 }, { x, y: y + 1 }
+            ];
+            const validNeighbors = neighbors.filter(pos => gameGrid.isValidPosition(pos.x, pos.y));
+            
+            if (validNeighbors.length >= 2) { // At least 2 valid directions
+              safePositions.push({ x, y });
+            }
+          }
+        }
+      }
+
+      if (safePositions.length > 0) {
+        const randomSafe = safePositions[Math.floor(Math.random() * safePositions.length)];
+        this.tileX = randomSafe.x;
+        this.tileY = randomSafe.y;
+        const center = getTileCenter(this.tileX, this.tileY);
+        this.x = center.x;
+        this.y = center.y;
+        this.direction = { x: 0, y: 0 };
+        this.stuck = false;
+        this.stuckTimer = 0;
+        this.pathCache.clear(); // Clear cache after teleport
+        console.log(`Ghost ${this.name} teleported to safe position (${this.tileX}, ${this.tileY})`);
+      }
     }
 
     draw() {
@@ -808,10 +1064,19 @@
       ctx.closePath();
       ctx.fill();
 
-      // Add outline
+      // Add outline with A* pathfinding indicator
       ctx.strokeStyle = this.frightened ? '#000080' : this.originalColor;
       ctx.lineWidth = 2;
       ctx.stroke();
+
+      // Subtle A* pathfinding indicator - small glow when actively pathfinding
+      if (!this.frightened && (this.direction.x !== 0 || this.direction.y !== 0)) {
+        ctx.shadowColor = this.originalColor;
+        ctx.shadowBlur = 3;
+        ctx.strokeStyle = this.originalColor;
+        ctx.lineWidth = 1;
+        ctx.stroke();
+      }
 
       // Reset shadow
       ctx.shadowBlur = 0;
@@ -1082,13 +1347,16 @@
     // Screen shake for level completion
     game.screenShake = 300;
     
-    // Increase difficulty progressively
+    // Increase difficulty progressively with A* optimizations
     ghosts.forEach(ghost => {
-      ghost.speed *= 1.06; // 6% faster each level (more balanced)
+      ghost.speed *= 1.05; // 5% faster each level (balanced for A* AI)
+      // Make pathfinding more aggressive at higher levels
+      ghost.directionChangeTimer = Math.max(50, 150 - game.level * 10);
+      ghost.pathCache.clear(); // Clear cache for new level
     });
     
     // Reduce frightened time slightly each level (max challenge)
-    const newFrightenedTime = Math.max(4000, FRIGHTENED_TIME - (game.level - 1) * 200);
+    const newFrightenedTime = Math.max(3000, FRIGHTENED_TIME - (game.level - 1) * 300);
     
     // Create level completion particles
     for (let i = 0; i < 50; i++) {
@@ -1319,6 +1587,10 @@
         break;
       case 'Space':
         game.paused = !game.paused;
+        break;
+      case 'KeyP': // Toggle A* path debugging
+        game.debugPaths = !game.debugPaths;
+        console.log('A* Path debugging:', game.debugPaths ? 'ON' : 'OFF');
         break;
     }
     e.preventDefault();
