@@ -128,6 +128,22 @@
     return true;
   }
 
+  // Discover the ghost house exit gate dynamically to avoid hardcoded coordinates
+  const HOUSE_EXIT = (function findHouseExit() {
+    let chosen = { x: 14, y: 12 };
+    let best = Infinity;
+    for (let y = 0; y < ROWS; y++) {
+      for (let x = 0; x < COLS; x++) {
+        if (grid[y][x] === GATE) {
+          // Prefer gate closest to the maze center
+          const dist = Math.abs(x - 14) + Math.abs(y - 17);
+          if (dist < best) { best = dist; chosen = { x, y }; }
+        }
+      }
+    }
+    return chosen;
+  })();
+
   // Entity base
   class Entity {
     constructor(x, y, speed) {
@@ -172,21 +188,33 @@
       }
 
       // Calculate new position
-      const newX = this.x + this.dir.x * this.speed * dt;
-      const newY = this.y + this.dir.y * this.speed * dt;
-      
-      // Check collision before applying movement
-      const newTile = pixelToTile(newX, newY);
-      if (isPassable(newTile.x, newTile.y, forGhost)) {
-        this.x = newX;
-        this.y = newY;
+      const stepX = this.dir.x * this.speed * dt;
+      const stepY = this.dir.y * this.speed * dt;
+
+      // Determine whether we are about to cross into the next tile along our direction
+      const aboutToCrossX = this.dir.x !== 0 && Math.abs(center.x - this.x) <= Math.abs(stepX);
+      const aboutToCrossY = this.dir.y !== 0 && Math.abs(center.y - this.y) <= Math.abs(stepY);
+
+      // If crossing a tile boundary, require the next tile to be passable; otherwise move freely within the tile
+      if (aboutToCrossX) {
+        const nx = tx + this.dir.x;
+        if (isPassable(nx, ty, forGhost)) {
+          this.x += stepX;
+        } else {
+          this.dir = { x: 0, y: 0 };
+          this.x = center.x;
+        }
+      } else if (aboutToCrossY) {
+        const ny = ty + this.dir.y;
+        if (isPassable(tx, ny, forGhost)) {
+          this.y += stepY;
+        } else {
+          this.dir = { x: 0, y: 0 };
+          this.y = center.y;
+        }
       } else {
-        // Stop movement if hitting wall
-        this.dir = { x: 0, y: 0 };
-        // Snap to center of current tile to prevent getting stuck
-        const currentCenter = tileCenter(tx, ty);
-        this.x = currentCenter.x;
-        this.y = currentCenter.y;
+        this.x += stepX;
+        this.y += stepY;
       }
 
       // Horizontal tunnel wrap
@@ -341,8 +369,8 @@
           this.mode = 'chase';
         }
       } else if (this.shouldLeaveHouse()) {
-        // Force ghosts to leave the house by targeting the exit
-        target = { x: 14, y: 12 }; // Exit point above the house
+        // Force ghosts to leave the house by targeting the discovered exit gate
+        target = { x: HOUSE_EXIT.x, y: HOUSE_EXIT.y };
       } else if (this.frightened) {
         // Random movement when frightened, but avoid walls
         let attempts = 0;
