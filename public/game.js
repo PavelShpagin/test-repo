@@ -194,19 +194,30 @@
       const radius = TILE * 0.45;
       ctx.save();
       ctx.translate(this.x, this.y);
-      const angle = Math.atan2(this.dir.y, this.dir.x);
+      const angle = Math.atan2(this.dir.y, this.dir.x) || 0;
       const open = this.mouth * Math.PI / 4 + 0.09;
-      const a1 = (angle || 0) + open;
-      const a2 = (angle || 0) - open;
+
+      // Body
       ctx.fillStyle = '#ffe300';
       ctx.beginPath();
-      // Draw Pac-Man as a full body with a mouth wedge missing by
-      // drawing the long arc around the circle and closing across the mouth.
-      // Important: do NOT move to the center first, otherwise we'd only draw
-      // the small triangular slice instead of the full body.
-      ctx.arc(0, 0, radius, a1, a2, true);
+      ctx.arc(0, 0, radius, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Cut out the mouth wedge to ensure visibility across browsers
+      const mx1 = Math.cos(angle + open) * radius;
+      const my1 = Math.sin(angle + open) * radius;
+      const mx2 = Math.cos(angle - open) * radius;
+      const my2 = Math.sin(angle - open) * radius;
+      const prevOp = ctx.globalCompositeOperation;
+      ctx.globalCompositeOperation = 'destination-out';
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.lineTo(mx1, my1);
+      ctx.lineTo(mx2, my2);
       ctx.closePath();
       ctx.fill();
+      ctx.globalCompositeOperation = prevOp;
+
       ctx.restore();
     }
   }
@@ -497,13 +508,13 @@
   // Input handling: keyboard and on-screen controls + swipe
   const keys = new Set();
   const keyMap = {
-    ArrowUp:  [0, -1], KeyW:  [0, -1],
-    ArrowDown:[0, 1],  KeyS:  [0, 1],
-    ArrowLeft:[-1, 0], KeyA:  [-1, 0],
-    ArrowRight:[1,0],  KeyD:  [1, 0]
+    ArrowUp:  [0, -1], KeyW:  [0, -1], w: [0, -1], W: [0, -1],
+    ArrowDown:[0, 1],  KeyS:  [0, 1],  s: [0, 1],  S: [0, 1],
+    ArrowLeft:[-1, 0], KeyA:  [-1, 0], a: [-1, 0], A: [-1, 0],
+    ArrowRight:[1,0],  KeyD:  [1, 0],  d: [1, 0],  D: [1, 0]
   };
   window.addEventListener('keydown', (e)=>{
-    const m = keyMap[e.code]; if (!m) return;
+    const m = keyMap[e.code] || keyMap[e.key]; if (!m) return;
     e.preventDefault();
     if (!state.running) {
       // Start the game on first input
@@ -532,17 +543,22 @@
 
   // Swipe on canvas
   let touchStart = null;
-  canvas.addEventListener('touchstart', e => { if (e.touches[0]) touchStart = { x: e.touches[0].clientX, y: e.touches[0].clientY }; }, { passive: true });
+  const swipeThreshold = 12; // px minimal movement
+  canvas.addEventListener('touchstart', e => {
+    if (e.touches && e.touches[0]) {
+      touchStart = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+    }
+  }, { passive: true });
   canvas.addEventListener('touchend', e => {
-    if (!touchStart) return;
+    if (!touchStart || !e.changedTouches || !e.changedTouches[0]) return;
     const t = e.changedTouches[0];
     const dx = t.clientX - touchStart.x; const dy = t.clientY - touchStart.y;
     if (!state.running) {
       overlay.classList.remove('show');
       state.score = 0; state.lives = 3; state.level = 1; resetLevel(false); state.running = true; drawHUD();
     }
-    if (Math.abs(dx) > Math.abs(dy)) pacman.setDirection(Math.sign(dx), 0);
-    else pacman.setDirection(0, Math.sign(dy));
+    if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > swipeThreshold) pacman.setDirection(Math.sign(dx), 0);
+    else if (Math.abs(dy) >= Math.abs(dx) && Math.abs(dy) > swipeThreshold) pacman.setDirection(0, Math.sign(dy));
     touchStart = null;
   });
 
