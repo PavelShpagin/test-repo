@@ -6,6 +6,16 @@
   "scripts": {
     "start": "node server.js"
   },
-  "keywords": ["pacman", "javascript", "game", "canvas", "a*", "mobile"],
-  "license": "MIT"
+  "keywords": [
+    "pacman",
+    "javascript",
+    "game",
+    "canvas",
+    "a*",
+    "mobile"
+  ],
+  "license": "MIT",
+  "devDependencies": {
+    "puppeteer": "^24.18.0"
+  }
 }

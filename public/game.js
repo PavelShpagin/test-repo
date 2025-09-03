@@ -215,36 +215,13 @@
       const newX = this.x + this.direction.x * this.speed * deltaTime;
       const newY = this.y + this.direction.y * this.speed * deltaTime;
       
+      // Calculate tile position correctly
       const newTileX = Math.floor(newX / TILE);
       const newTileY = Math.floor(newY / TILE);
 
       if (isValidPosition(newTileX, newTileY)) {
-        // Simple corridor centering - basic math only
-        const tileCenterX = newTileX * TILE + TILE / 2;
-        const tileCenterY = newTileY * TILE + TILE / 2;
-        
-        // Keep within 40% of tile center - simple bounds
-        const maxOffset = TILE * 0.4;
-        const offsetX = newX - tileCenterX;
-        const offsetY = newY - tileCenterY;
-        
-        // Basic clamping
-        if (offsetX > maxOffset) {
-          this.x = tileCenterX + maxOffset;
-        } else if (offsetX < -maxOffset) {
-          this.x = tileCenterX - maxOffset;
-        } else {
-          this.x = newX;
-        }
-        
-        if (offsetY > maxOffset) {
-          this.y = tileCenterY + maxOffset;
-        } else if (offsetY < -maxOffset) {
-          this.y = tileCenterY - maxOffset;
-        } else {
-          this.y = newY;
-        }
-        
+        this.x = newX;
+        this.y = newY;
         this.tileX = newTileX;
         this.tileY = newTileY;
       } else {
@@ -551,6 +528,7 @@
       const newX = this.x + this.direction.x * this.speed * deltaTime;
       const newY = this.y + this.direction.y * this.speed * deltaTime;
       
+      // Calculate tile position correctly
       const newTileX = Math.floor(newX / TILE);
       const newTileY = Math.floor(newY / TILE);
 
@@ -853,18 +831,35 @@
     game.fruitSpawned = false;
     particles.length = 0;
     
-    pacman = new PacMan();
-    ghosts = [
-      new Ghost('blinky', '#FF0000', 9, 9, 'aggressive'),
-      new Ghost('pinky', '#FFB8FF', 8, 10, 'ambush'),
-      new Ghost('inky', '#00FFFF', 10, 10, 'patrol'),
-      new Ghost('clyde', '#FFB852', 9, 11, 'random')
+    // Reset pacman instead of creating new
+    pacman.tileX = 9;
+    pacman.tileY = 15;
+    pacman.x = pacman.tileX * TILE + TILE / 2;
+    pacman.y = pacman.tileY * TILE + TILE / 2;
+    pacman.direction = { x: 0, y: 0 };
+    pacman.nextDirection = { x: 0, y: 0 };
+    pacman.isDying = false;
+    pacman.deathAnimation = 0;
+    
+    // Reset ghosts
+    const ghostConfigs = [
+      { name: 'blinky', color: '#FF0000', x: 9, y: 9, personality: 'aggressive' },
+      { name: 'pinky', color: '#FFB8FF', x: 8, y: 10, personality: 'ambush' },
+      { name: 'inky', color: '#00FFFF', x: 10, y: 10, personality: 'patrol' },
+      { name: 'clyde', color: '#FFB852', x: 9, y: 11, personality: 'random' }
     ];
     
-    ghosts[0].spawnTimer = 0;
-    ghosts[1].spawnTimer = 2000;
-    ghosts[2].spawnTimer = 4000;
-    ghosts[3].spawnTimer = 6000;
+    ghosts.forEach((ghost, i) => {
+      const config = ghostConfigs[i];
+      ghost.tileX = config.x;
+      ghost.tileY = config.y;
+      ghost.x = ghost.tileX * TILE + TILE / 2;
+      ghost.y = ghost.tileY * TILE + TILE / 2;
+      ghost.direction = { x: 0, y: 0 };
+      ghost.eyesOnly = false;
+      ghost.color = ghost.originalColor;
+      ghost.spawnTimer = i * 2000;
+    });
     
     initGrid();
     updateHUD();
@@ -1133,6 +1128,8 @@
   
   // Prevent context menu on canvas
   canvas.addEventListener('contextmenu', e => e.preventDefault());
+  
+
   
   console.log('🎮 Modern Pac-Man Ready! No stalls, smooth gameplay!');
 })();
