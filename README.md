@@ -1,37 +1,13 @@
-# Pacman - Mobile & Desktop
+# Pacman
 
-A clean, responsive Pacman game that works perfectly on both mobile and desktop devices.
+Modern, minimal Pacman game optimized for mobile.
 
 ## Features
+- Clean, modern UI
+- Touch controls + swipe gestures
+- Grid-based collision system
+- Smooth 60 FPS performance
+- No dependencies
 
-- **Responsive Design**: Automatically adapts to any screen size
-- **Mobile Controls**: Touch-friendly control pad and swipe gestures
-- **Desktop Controls**: Classic arrow key controls
-- **Ghost AI**: Ghosts pass through walls with random movement
-- **Score System**: Persistent high score using localStorage
-- **Progressive Difficulty**: Speed increases with each level
-- **Clean Graphics**: Pixel-perfect rendering with smooth animations
-
-## How to Play
-
-### Desktop
-- Use arrow keys to control Pacman
-- Avoid the ghosts
-- Collect all pellets to advance
-
-### Mobile
-- Use the on-screen control pad
-- Or swipe on the game canvas
-- Touch-optimized for all devices
-
-## Technical Details
-
-- Pure JavaScript (no dependencies)
-- HTML5 Canvas
-- Responsive CSS
-- Mobile-first design
-- 60 FPS performance
-
-## Live Demo
-
-Open `index.html` in any modern browser or deploy to GitHub Pages for instant play.
+## Play
+Open index.html in any browser or deploy to GitHub Pages.
