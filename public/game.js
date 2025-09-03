@@ -185,65 +185,63 @@
     }
     setDirection(dx, dy) { this.nextDir = { x: dx, y: dy }; }
     move(dt, forGhost=false) {
-      const { x: tx, y: ty } = this.tile;
-      const center = tileCenter(tx, ty);
-      
-      // Keep entity aligned to corridor to avoid getting stuck against walls
-      if (this.dir.x !== 0) this.y = center.y;
-      if (this.dir.y !== 0) this.x = center.x;
-
+      // At tile center, try to apply queued direction and validate current one
+      let { x: tx, y: ty } = this.tile;
+      let center = tileCenter(tx, ty);
       if (this.atCenterOfTile()) {
-        // Change direction at intersections
         if (this.nextDir.x || this.nextDir.y) {
           const nx = tx + this.nextDir.x; const ny = ty + this.nextDir.y;
           if (isPassable(nx, ny, forGhost)) {
             this.dir = this.nextDir;
-            this.nextDir = { x: 0, y: 0 }; // Clear next direction after applying
+            this.nextDir = { x: 0, y: 0 };
           }
         }
-        // Check if current direction is still valid
         const fx = tx + this.dir.x; const fy = ty + this.dir.y;
-        if (!isPassable(fx, fy, forGhost)) {
-          this.dir = { x: 0, y: 0 };
-        }
+        if (!isPassable(fx, fy, forGhost)) this.dir = { x: 0, y: 0 };
       }
 
-      // Calculate new position
-      const stepX = this.dir.x * this.speed * dt;
-      const stepY = this.dir.y * this.speed * dt;
-
-      // Snap to tile center only if the next step would cross the center along the movement axis
-      if (this.dir.x !== 0 && Math.sign(center.x - this.x) === Math.sign(this.dir.x) && Math.abs(center.x - this.x) <= Math.abs(stepX)) {
-        this.x = center.x;
-      }
-      if (this.dir.y !== 0 && Math.sign(center.y - this.y) === Math.sign(this.dir.y) && Math.abs(center.y - this.y) <= Math.abs(stepY)) {
-        this.y = center.y;
-      }
-
-      // Determine whether we are about to cross into the next tile along our direction
-      const aboutToCrossX = this.dir.x !== 0 && Math.abs(center.x - this.x) <= Math.abs(stepX);
-      const aboutToCrossY = this.dir.y !== 0 && Math.abs(center.y - this.y) <= Math.abs(stepY);
-
-      // If crossing a tile boundary, require the next tile to be passable; otherwise move freely within the tile
-      if (aboutToCrossX) {
-        const nx = tx + this.dir.x;
-        if (isPassable(nx, ty, forGhost)) {
-          this.x += stepX;
+      // Move strictly tile-by-tile along corridors. This removes all UI/scale coupling.
+      let remaining = this.speed * dt;
+      while (remaining > 0 && (this.dir.x !== 0 || this.dir.y !== 0)) {
+        // Recompute based on current tile each iteration
+        tx = this.tile.x; ty = this.tile.y; center = tileCenter(tx, ty);
+        if (this.dir.x !== 0) {
+          this.y = center.y; // lock to corridor
+          const edgeX = center.x + this.dir.x * (TILE / 2);
+          const distToEdge = Math.max(0, Math.abs(edgeX - this.x));
+          if (remaining <= distToEdge) {
+            this.x += this.dir.x * remaining;
+            remaining = 0;
+          } else {
+            this.x = edgeX;
+            remaining -= distToEdge;
+            const nx = tx + this.dir.x;
+            if (!isPassable(nx, ty, forGhost)) { this.dir = { x: 0, y: 0 }; break; }
+            // Continue into next tile on next loop iteration
+          }
+        } else if (this.dir.y !== 0) {
+          this.x = center.x; // lock to corridor
+          const edgeY = center.y + this.dir.y * (TILE / 2);
+          const distToEdge = Math.max(0, Math.abs(edgeY - this.y));
+          if (remaining <= distToEdge) {
+            this.y += this.dir.y * remaining;
+            remaining = 0;
+          } else {
+            this.y = edgeY;
+            remaining -= distToEdge;
+            const ny = ty + this.dir.y;
+            if (!isPassable(tx, ny, forGhost)) { this.dir = { x: 0, y: 0 }; break; }
+            // Continue into next tile on next loop iteration
+          }
         } else {
-          this.dir = { x: 0, y: 0 };
-          this.x = center.x;
+          break;
         }
-      } else if (aboutToCrossY) {
-        const ny = ty + this.dir.y;
-        if (isPassable(tx, ny, forGhost)) {
-          this.y += stepY;
-        } else {
-          this.dir = { x: 0, y: 0 };
-          this.y = center.y;
+
+        // If we just reached the center of a tile, consider queued turns immediately
+        if (this.atCenterOfTile() && (this.nextDir.x || this.nextDir.y)) {
+          const nx2 = this.tile.x + this.nextDir.x; const ny2 = this.tile.y + this.nextDir.y;
+          if (isPassable(nx2, ny2, forGhost)) { this.dir = this.nextDir; this.nextDir = { x: 0, y: 0 }; }
         }
-      } else {
-        this.x += stepX;
-        this.y += stepY;
       }
 
       // Horizontal tunnel wrap
@@ -910,11 +908,13 @@
       pacman.update(dt);
       for (const g of ghosts) g.update(dt, pacman);
       checkCollisions();
+      rebuildOccupancy();
       drawMaze();
       pacman.draw();
       for (const g of ghosts) g.draw();
       drawHUD();
     } else {
+      rebuildOccupancy();
       drawMaze();
       pacman.draw();
       for (const g of ghosts) g.draw();
