@@ -2,153 +2,205 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="theme-color" content="#000000">
-    <title>PAC-MAN Mobile</title>
-    
-    <!-- Preconnect to Google Fonts -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
-    
-    <link rel="stylesheet" href="style.css">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Pacman</title>
     <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#000000">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            padding: 10px;
+            touch-action: none;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        #gameContainer {
+            background: rgba(0, 0, 0, 0.9);
+            border-radius: 20px;
+            padding: 20px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 20px;
+            max-width: 100%;
+        }
+
+        #gameHeader {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            width: 100%;
+            color: white;
+            font-size: 18px;
+            font-weight: bold;
+            padding: 0 10px;
+        }
+
+        #score, #lives {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 8px 16px;
+            border-radius: 10px;
+            min-width: 100px;
+            text-align: center;
+        }
+
+        #gameCanvas {
+            border: 3px solid #4a5568;
+            border-radius: 10px;
+            background: #000;
+            max-width: 100%;
+            height: auto;
+            display: block;
+        }
+
+        #controls {
+            display: grid;
+            grid-template-columns: repeat(3, 80px);
+            grid-template-rows: repeat(3, 80px);
+            gap: 10px;
+            margin-top: 10px;
+        }
+
+        .control-btn {
+            background: linear-gradient(145deg, #4a5568, #2d3748);
+            border: none;
+            border-radius: 15px;
+            color: white;
+            font-size: 24px;
+            font-weight: bold;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+            transition: all 0.2s;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        .control-btn:active {
+            transform: scale(0.95);
+            background: linear-gradient(145deg, #2d3748, #1a202c);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+        }
+
+        #btnUp { grid-column: 2; grid-row: 1; }
+        #btnLeft { grid-column: 1; grid-row: 2; }
+        #btnRight { grid-column: 3; grid-row: 2; }
+        #btnDown { grid-column: 2; grid-row: 3; }
+        #btnPause { 
+            grid-column: 2; 
+            grid-row: 2; 
+            background: linear-gradient(145deg, #e53e3e, #c53030);
+        }
+
+        #gameOver {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.95);
+            color: white;
+            padding: 30px;
+            border-radius: 20px;
+            text-align: center;
+            display: none;
+            z-index: 1000;
+        }
+
+        #gameOver h2 {
+            font-size: 32px;
+            margin-bottom: 20px;
+            color: #fbbf24;
+        }
+
+        #finalScore {
+            font-size: 24px;
+            margin-bottom: 20px;
+        }
+
+        #restartBtn {
+            background: linear-gradient(145deg, #10b981, #059669);
+            border: none;
+            color: white;
+            padding: 15px 30px;
+            font-size: 18px;
+            font-weight: bold;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+
+        #restartBtn:active {
+            transform: scale(0.95);
+        }
+
+        @media (max-width: 480px) {
+            #controls {
+                grid-template-columns: repeat(3, 70px);
+                grid-template-rows: repeat(3, 70px);
+                gap: 8px;
+            }
+            
+            .control-btn {
+                font-size: 20px;
+            }
+
+            #gameHeader {
+                font-size: 16px;
+            }
+
+            #gameContainer {
+                padding: 15px;
+            }
+        }
+
+        @media (max-width: 360px) {
+            #controls {
+                grid-template-columns: repeat(3, 60px);
+                grid-template-rows: repeat(3, 60px);
+                gap: 5px;
+            }
+        }
+    </style>
 </head>
 <body>
-    <div id="app" class="app-container">
-        <!-- Game Header -->
-        <header class="game-header">
-            <div class="header-top">
-                <div class="game-title">PAC-MAN</div>
-                <div class="header-actions">
-                    <button id="fullscreenBtn" class="icon-btn" aria-label="Fullscreen">
-                        <svg viewBox="0 0 24 24" fill="currentColor">
-                            <path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/>
-                        </svg>
-                    </button>
-                    <button id="soundBtn" class="icon-btn" aria-label="Sound">
-                        <svg viewBox="0 0 24 24" fill="currentColor">
-                            <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/>
-                        </svg>
-                    </button>
-                </div>
-            </div>
-            <div class="score-panel">
-                <div class="score-item">
-                    <span class="score-value" id="score">000000</span>
-                </div>
-                <div class="lives-display" id="livesDisplay">
-                    <span class="life-icon">🟡</span>
-                    <span class="life-icon">🟡</span>
-                    <span class="life-icon">🟡</span>
-                </div>
-                <div class="level-indicator">
-                    <span class="level-text">L<span id="level">1</span></span>
-                </div>
-            </div>
-        </header>
-
-        <!-- Game Canvas Container -->
-        <main class="game-main">
-            <div class="canvas-wrapper">
-                <canvas id="gameCanvas"></canvas>
-                
-                <!-- Touch Control Overlay -->
-                <div id="touchOverlay" class="touch-overlay">
-                    <div class="touch-zone" data-direction="up"></div>
-                    <div class="touch-zone" data-direction="down"></div>
-                    <div class="touch-zone" data-direction="left"></div>
-                    <div class="touch-zone" data-direction="right"></div>
-                </div>
-
-                <!-- Game State Overlays -->
-                <div id="gameMenu" class="game-overlay active">
-                    <div class="overlay-content">
-                        <div class="menu-logo">
-                            <div class="pac-animation"></div>
-                            <h1>PAC-MAN</h1>
-                        </div>
-                        <div class="menu-subtitle">MOBILE EDITION</div>
-                        <button id="startBtn" class="primary-btn pulse">
-                            TAP TO START
-                        </button>
-                        <div class="high-score">
-                            HIGH SCORE: <span id="highScore">0</span>
-                        </div>
-                    </div>
-                </div>
-
-                <div id="gamePaused" class="game-overlay">
-                    <div class="overlay-content">
-                        <h2>PAUSED</h2>
-                        <button id="resumeBtn" class="primary-btn">RESUME</button>
-                        <button id="menuBtn" class="secondary-btn">MAIN MENU</button>
-                    </div>
-                </div>
-
-                <div id="gameOver" class="game-overlay">
-                    <div class="overlay-content">
-                        <h2 id="gameOverTitle">GAME OVER</h2>
-                        <div class="final-score">
-                            SCORE: <span id="finalScore">0</span>
-                        </div>
-                        <div id="newHighScore" class="new-high-score hidden">
-                            NEW HIGH SCORE!
-                        </div>
-                        <button id="playAgainBtn" class="primary-btn">PLAY AGAIN</button>
-                        <button id="menuBtn2" class="secondary-btn">MAIN MENU</button>
-                    </div>
-                </div>
-
-                <div id="levelComplete" class="game-overlay">
-                    <div class="overlay-content">
-                        <h2>LEVEL COMPLETE!</h2>
-                        <div class="level-stats">
-                            <div>LEVEL <span id="completedLevel">1</span> CLEARED</div>
-                            <div>BONUS: <span id="levelBonus">0</span></div>
-                        </div>
-                        <button id="nextLevelBtn" class="primary-btn">NEXT LEVEL</button>
-                    </div>
-                </div>
-            </div>
-        </main>
-
-        <!-- Mobile Controls -->
-        <footer class="game-controls">
-            <div class="swipe-indicator">
-                <svg viewBox="0 0 100 100" class="swipe-icon">
-                    <circle cx="50" cy="50" r="20" fill="currentColor" opacity="0.3"/>
-                    <path d="M50 30 L50 70 M30 50 L70 50" stroke="currentColor" stroke-width="3" stroke-linecap="round" opacity="0.5"/>
-                    <path d="M50 25 L50 35 M50 65 L50 75 M25 50 L35 50 M65 50 L75 50" stroke="currentColor" stroke-width="4" stroke-linecap="round"/>
-                </svg>
-                <div class="swipe-text">SWIPE TO MOVE</div>
-            </div>
-            <button id="pauseBtn" class="control-btn">
-                <svg viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/>
-                </svg>
-            </button>
-        </footer>
-    </div>
-
-    <!-- Loading Screen -->
-    <div id="loadingScreen" class="loading-screen">
-        <div class="loading-content">
-            <div class="pac-loader">
-                <div class="pac"></div>
-                <div class="dots">
-                    <span></span>
-                    <span></span>
-                    <span></span>
-                    <span></span>
-                </div>
-            </div>
-            <div class="loading-text">LOADING...</div>
+    <div id="gameContainer">
+        <div id="gameHeader">
+            <div id="score">Score: 0</div>
+            <div id="lives">Lives: 3</div>
+        </div>
+        <canvas id="gameCanvas"></canvas>
+        <div id="controls">
+            <button id="btnUp" class="control-btn">▲</button>
+            <button id="btnLeft" class="control-btn">◄</button>
+            <button id="btnPause" class="control-btn">⏸</button>
+            <button id="btnRight" class="control-btn">►</button>
+            <button id="btnDown" class="control-btn">▼</button>
         </div>
     </div>
 
-    <script src="game.js" type="module"></script>
+    <div id="gameOver">
+        <h2>Game Over!</h2>
+        <div id="finalScore">Final Score: 0</div>
+        <button id="restartBtn">Play Again</button>
+    </div>
+
+    <script src="pacman.js"></script>
 </body>
 </html>
