@@ -1,10 +1,10 @@
-staticSites:
-  - name: pacman-js
-    buildCommand: ""
-    publishPath: public
-    pullRequestPreviewsEnabled: true
-    headers:
-      - path: /*
-        name: Cache-Control
-        value: public, max-age=600
+services:
+  - type: web
+    name: pacman-js-node
+    env: node
+    buildCommand: npm install --omit=dev
+    startCommand: node server.js
+    plan: free
+    autoDeploy: true
+    healthCheckPath: /
 
