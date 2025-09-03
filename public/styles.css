@@ -37,13 +37,14 @@ body {
 #hud .stats { display: flex; gap: 12px; }
 
 canvas#game {
-  width: min(95vw, 560px);
-  height: calc(min(95vw, 560px) * (31/28));
+  width: min(95vw, 570px);
+  height: calc(min(95vw, 570px) * (21/19));
   image-rendering: pixelated;
   border-radius: 8px;
   box-shadow: 0 0 0 4px #001b8f, 0 0 24px rgba(0, 0, 0, 0.6) inset;
   touch-action: none;
   -webkit-tap-highlight-color: transparent;
+  cursor: pointer;
 }
 
 .overlay {
@@ -62,14 +63,22 @@ canvas#game {
   border-radius: 10px;
   text-align: center;
 }
-.overlay .panel h1 { margin: 8px 0 12px; font-size: 20px; }
+.overlay .panel h1 { margin: 8px 0 12px; font-size: 24px; color: var(--hud); }
+.overlay .panel p { margin: 8px 0; font-size: 12px; line-height: 1.4; }
 .overlay button {
   background: var(--maze);
   border: none;
   color: white;
-  padding: 10px 18px;
-  border-radius: 6px;
-  font-size: 14px;
+  padding: 12px 24px;
+  border-radius: 8px;
+  font-size: 16px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  margin-top: 10px;
+}
+.overlay button:hover {
+  background: #0040ff;
+  transform: scale(1.05);
 }
 
 .controls { width: 100%; display: grid; place-items: center; padding: 10px 0 16px; }
