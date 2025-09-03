@@ -207,38 +207,50 @@
         }
       }
 
-      // Move with alignment
+      // Move with strict overflow prevention
       if (this.direction.x !== 0 || this.direction.y !== 0) {
-        const newX = this.x + this.direction.x * this.speed * deltaTime;
-        const newY = this.y + this.direction.y * this.speed * deltaTime;
+        const moveDistance = this.speed * deltaTime;
+        const newX = this.x + this.direction.x * moveDistance;
+        const newY = this.y + this.direction.y * moveDistance;
         
-        const newTileX = Math.floor(newX / TILE);
-        const newTileY = Math.floor(newY / TILE);
+        // Calculate target tile
+        const targetTileX = Math.floor(newX / TILE);
+        const targetTileY = Math.floor(newY / TILE);
 
-        if (isValidPosition(newTileX, newTileY)) {
-          this.x = newX;
-          this.y = newY;
-          this.tileX = newTileX;
-          this.tileY = newTileY;
-        } else {
-          // Anti-overshoot: stop before hitting wall
-          const buffer = TILE * 0.15; // 15% buffer from wall
+        // Check if we can move to target tile
+        if (isValidPosition(targetTileX, targetTileY)) {
+          // Calculate corridor boundaries for this tile
+          const corridorLeft = targetTileX * TILE + TILE * 0.2;
+          const corridorRight = targetTileX * TILE + TILE * 0.8;
+          const corridorTop = targetTileY * TILE + TILE * 0.2;
+          const corridorBottom = targetTileY * TILE + TILE * 0.8;
           
+          // Clamp position within corridor bounds
+          this.x = Math.max(corridorLeft, Math.min(corridorRight, newX));
+          this.y = Math.max(corridorTop, Math.min(corridorBottom, newY));
+          this.tileX = targetTileX;
+          this.tileY = targetTileY;
+        } else {
+          // Hit wall - calculate safe stopping position
+          const currentCenterX = this.tileX * TILE + TILE / 2;
+          const currentCenterY = this.tileY * TILE + TILE / 2;
+          
+          // Stop at corridor edge, not wall edge
           if (this.direction.x > 0) {
-            this.x = Math.min(this.x, (this.tileX + 1) * TILE - buffer);
+            this.x = Math.min(this.x, this.tileX * TILE + TILE * 0.8);
           } else if (this.direction.x < 0) {
-            this.x = Math.max(this.x, this.tileX * TILE + buffer);
+            this.x = Math.max(this.x, this.tileX * TILE + TILE * 0.2);
           }
           
           if (this.direction.y > 0) {
-            this.y = Math.min(this.y, (this.tileY + 1) * TILE - buffer);
+            this.y = Math.min(this.y, this.tileY * TILE + TILE * 0.8);
           } else if (this.direction.y < 0) {
-            this.y = Math.max(this.y, this.tileY * TILE + buffer);
+            this.y = Math.max(this.y, this.tileY * TILE + TILE * 0.2);
           }
           
-          // Stop and center
-          this.x = centerX;
-          this.y = centerY;
+          // Center and stop
+          this.x = currentCenterX;
+          this.y = currentCenterY;
           this.direction = { x: 0, y: 0 };
         }
       }
@@ -373,36 +385,48 @@
         this.pickDirection(pacman);
       }
 
-      // Move with perfect alignment
+      // Move with strict overflow prevention
       if (this.direction.x !== 0 || this.direction.y !== 0) {
-        const newX = this.x + this.direction.x * this.speed * deltaTime;
-        const newY = this.y + this.direction.y * this.speed * deltaTime;
+        const moveDistance = this.speed * deltaTime;
+        const newX = this.x + this.direction.x * moveDistance;
+        const newY = this.y + this.direction.y * moveDistance;
         
-        const newTileX = Math.floor(newX / TILE);
-        const newTileY = Math.floor(newY / TILE);
+        // Calculate target tile
+        const targetTileX = Math.floor(newX / TILE);
+        const targetTileY = Math.floor(newY / TILE);
 
-        if (isValidPosition(newTileX, newTileY)) {
-          this.x = newX;
-          this.y = newY;
-          this.tileX = newTileX;
-          this.tileY = newTileY;
-        } else {
-          // Anti-overshoot: stop before hitting wall
-          const buffer = TILE * 0.15; // 15% buffer from wall
+        // Check if we can move to target tile
+        if (isValidPosition(targetTileX, targetTileY)) {
+          // Calculate corridor boundaries for this tile
+          const corridorLeft = targetTileX * TILE + TILE * 0.2;
+          const corridorRight = targetTileX * TILE + TILE * 0.8;
+          const corridorTop = targetTileY * TILE + TILE * 0.2;
+          const corridorBottom = targetTileY * TILE + TILE * 0.8;
           
+          // Clamp position within corridor bounds
+          this.x = Math.max(corridorLeft, Math.min(corridorRight, newX));
+          this.y = Math.max(corridorTop, Math.min(corridorBottom, newY));
+          this.tileX = targetTileX;
+          this.tileY = targetTileY;
+        } else {
+          // Hit wall - calculate safe stopping position
+          const currentCenterX = this.tileX * TILE + TILE / 2;
+          const currentCenterY = this.tileY * TILE + TILE / 2;
+          
+          // Stop at corridor edge, not wall edge
           if (this.direction.x > 0) {
-            this.x = Math.min(this.x, (this.tileX + 1) * TILE - buffer);
+            this.x = Math.min(this.x, this.tileX * TILE + TILE * 0.8);
           } else if (this.direction.x < 0) {
-            this.x = Math.max(this.x, this.tileX * TILE + buffer);
+            this.x = Math.max(this.x, this.tileX * TILE + TILE * 0.2);
           }
           
           if (this.direction.y > 0) {
-            this.y = Math.min(this.y, (this.tileY + 1) * TILE - buffer);
+            this.y = Math.min(this.y, this.tileY * TILE + TILE * 0.8);
           } else if (this.direction.y < 0) {
-            this.y = Math.max(this.y, this.tileY * TILE + buffer);
+            this.y = Math.max(this.y, this.tileY * TILE + TILE * 0.2);
           }
           
-          // Stop and center
+          // Center and get new direction
           const center = getTileCenter(this.tileX, this.tileY);
           this.x = center.x;
           this.y = center.y;
