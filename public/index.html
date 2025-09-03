@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+    <title>Pac‑Man JS</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div id="hud">
+      <div class="brand">PAC‑MAN</div>
+      <div class="stats">
+        <span id="score">0</span>
+        <span id="lives"></span>
+        <span id="level">1</span>
+      </div>
+    </div>
+
+    <canvas id="game" width="560" height="620"></canvas>
+
+    <div id="overlay" class="overlay show">
+      <div class="panel">
+        <h1>Pac‑Man</h1>
+        <p>Collect all pellets. Avoid ghosts unless energized!</p>
+        <button id="startBtn">Start</button>
+      </div>
+    </div>
+
+    <div id="controls" class="controls">
+      <div class="dpad">
+        <button id="btnUp" aria-label="Up">▲</button>
+        <div class="middle">
+          <button id="btnLeft" aria-label="Left">◀</button>
+          <button id="btnRight" aria-label="Right">▶</button>
+        </div>
+        <button id="btnDown" aria-label="Down">▼</button>
+      </div>
+    </div>
+
+    <script src="./game.js"></script>
+  </body>
+  </html>
+

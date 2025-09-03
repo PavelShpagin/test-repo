@@ -1,0 +1,11 @@
+{
+  "name": "pacman-js",
+  "version": "1.0.0",
+  "description": "Pac-Man in JavaScript with A* ghost AI and mobile controls",
+  "private": true,
+  "scripts": {
+    "start": "node server.js"
+  },
+  "keywords": ["pacman", "javascript", "game", "canvas", "a*", "mobile"],
+  "license": "MIT"
+}

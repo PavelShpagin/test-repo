@@ -1,0 +1,94 @@
+@font-face {
+  font-family: 'PressStart2PFallback';
+  src: local('Arial');
+}
+
+:root {
+  --bg: #000;
+  --hud: #ffe300;
+  --maze: #003cff;
+  --text: #fff;
+}
+
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: PressStart2P, PressStart2PFallback, system-ui, sans-serif;
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  place-items: center;
+}
+
+#hud {
+  width: 100%;
+  max-width: 620px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  color: var(--hud);
+  text-shadow: 0 0 6px rgba(255, 227, 0, 0.6);
+}
+
+#hud .brand { letter-spacing: 2px; }
+#hud .stats { display: flex; gap: 12px; }
+
+canvas#game {
+  width: min(95vw, 560px);
+  height: calc(min(95vw, 560px) * (31/28));
+  image-rendering: pixelated;
+  border-radius: 8px;
+  box-shadow: 0 0 0 4px #001b8f, 0 0 24px rgba(0, 0, 0, 0.6) inset;
+}
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0,0,0,0.6);
+}
+.overlay.show { display: flex; }
+.overlay .panel {
+  background: #0b0b0b;
+  border: 2px solid #1c2cff;
+  padding: 20px 24px;
+  border-radius: 10px;
+  text-align: center;
+}
+.overlay .panel h1 { margin: 8px 0 12px; font-size: 20px; }
+.overlay button {
+  background: var(--maze);
+  border: none;
+  color: white;
+  padding: 10px 18px;
+  border-radius: 6px;
+  font-size: 14px;
+}
+
+.controls { width: 100%; display: grid; place-items: center; padding: 10px 0 16px; }
+.dpad {
+  display: grid;
+  grid-template-rows: repeat(3, 56px);
+  grid-template-columns: 56px 56px 56px;
+  gap: 10px;
+}
+.dpad button {
+  background: #111;
+  color: #eee;
+  border: 2px solid #2f4cff;
+  border-radius: 10px;
+  font-size: 18px;
+}
+.dpad #btnUp { grid-column: 2; grid-row: 1; }
+.dpad .middle { grid-column: 1 / span 3; grid-row: 2; display: flex; justify-content: center; gap: 10px; }
+.dpad #btnDown { grid-column: 2; grid-row: 3; }
+
+@media (min-width: 700px) {
+  .controls { display: none; }
+}
+
