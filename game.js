@@ -36,13 +36,15 @@ let animationFrame = 0;
 
 // Entities
 let pacman = {
-    gridX: 0,
-    gridY: 0,
-    x: 0,
-    y: 0,
+    gridX: 0,      // Current cell X
+    gridY: 0,      // Current cell Y
+    targetX: 0,    // Target cell X
+    targetY: 0,    // Target cell Y
+    x: 0,          // UI position X (for smooth animation)
+    y: 0,          // UI position Y (for smooth animation)
     direction: null,
     nextDirection: null,
-    speed: 0.15,
+    speed: 0.1,
     moving: false
 };
 
@@ -95,10 +97,13 @@ function resetLevel() {
                 // Set pacman position
                 pacman.gridX = x;
                 pacman.gridY = y;
+                pacman.targetX = x;
+                pacman.targetY = y;
                 pacman.x = x;
                 pacman.y = y;
                 pacman.direction = null;
                 pacman.nextDirection = null;
+                pacman.moving = false;
                 grid[y][x] = 0; // Clear cell
                 pellets.push({ x, y }); // Add pellet
             } else if (cell === 3) {
@@ -106,12 +111,13 @@ function resetLevel() {
                 ghosts.push({
                     gridX: x,
                     gridY: y,
+                    targetX: x,
+                    targetY: y,
                     x: x,
                     y: y,
                     direction: DIRECTIONS.UP,
-                    speed: 0.08,
-                    color: GHOST_COLORS[ghosts.length % GHOST_COLORS.length],
-                    moveTimer: Math.random() * 30
+                    speed: 0.05,
+                    color: GHOST_COLORS[ghosts.length % GHOST_COLORS.length]
                 });
                 grid[y][x] = 0; // Clear cell
             }
@@ -190,87 +196,58 @@ function setupControls() {
     });
 }
 
-function canMove(x, y, direction) {
+function canMoveTo(fromX, fromY, direction) {
     if (!direction) return false;
     
-    // Calculate next position
-    const nextX = x + direction.x * pacman.speed;
-    const nextY = y + direction.y * pacman.speed;
+    const newX = fromX + direction.x;
+    const newY = fromY + direction.y;
     
-    // Check the cell we're moving into
-    let checkX, checkY;
-    
-    if (direction.x > 0) checkX = Math.floor(nextX + 0.4);
-    else if (direction.x < 0) checkX = Math.floor(nextX - 0.4 + 1);
-    else checkX = Math.floor(nextX);
-    
-    if (direction.y > 0) checkY = Math.floor(nextY + 0.4);
-    else if (direction.y < 0) checkY = Math.floor(nextY - 0.4 + 1);
-    else checkY = Math.floor(nextY);
-    
-    // Bounds check
-    if (checkX < 0 || checkX >= COLS || checkY < 0 || checkY >= ROWS) {
+    // Check bounds
+    if (newX < 0 || newX >= COLS || newY < 0 || newY >= ROWS) {
         return false;
     }
     
-    return grid[checkY][checkX] !== 1;
+    // Check if target cell is not a wall
+    return grid[newY][newX] !== 1;
 }
 
 function updatePacman() {
-    // Update grid position
-    pacman.gridX = Math.round(pacman.x);
-    pacman.gridY = Math.round(pacman.y);
+    // Smooth movement towards target
+    const dx = pacman.targetX - pacman.x;
+    const dy = pacman.targetY - pacman.y;
     
-    // Check for direction change at grid intersections
-    if (pacman.nextDirection) {
-        const atIntersection = Math.abs(pacman.x - pacman.gridX) < 0.2 && 
-                              Math.abs(pacman.y - pacman.gridY) < 0.2;
+    if (Math.abs(dx) > 0.01 || Math.abs(dy) > 0.01) {
+        // Still moving to target
+        pacman.x += dx * pacman.speed * 2;
+        pacman.y += dy * pacman.speed * 2;
+        pacman.moving = true;
+    } else {
+        // Reached target cell
+        pacman.x = pacman.targetX;
+        pacman.y = pacman.targetY;
+        pacman.gridX = pacman.targetX;
+        pacman.gridY = pacman.targetY;
         
-        if (atIntersection) {
-            // Test if we can move in the new direction
-            const testX = pacman.gridX;
-            const testY = pacman.gridY;
-            const nextX = testX + pacman.nextDirection.x;
-            const nextY = testY + pacman.nextDirection.y;
-            
-            if (nextX >= 0 && nextX < COLS && nextY >= 0 && nextY < ROWS &&
-                grid[nextY][nextX] !== 1) {
-                pacman.direction = pacman.nextDirection;
-                pacman.nextDirection = null;
-                // Snap to grid for smooth turning
-                pacman.x = pacman.gridX;
-                pacman.y = pacman.gridY;
-            }
+        // Check for direction change
+        if (pacman.nextDirection && canMoveTo(pacman.gridX, pacman.gridY, pacman.nextDirection)) {
+            pacman.direction = pacman.nextDirection;
+            pacman.nextDirection = null;
         }
-    }
-    
-    // Move pacman continuously until hitting a wall
-    if (pacman.direction) {
-        const nextX = pacman.x + pacman.direction.x * pacman.speed;
-        const nextY = pacman.y + pacman.direction.y * pacman.speed;
         
-        // Check if next position would hit a wall
-        if (canMove(pacman.x, pacman.y, pacman.direction)) {
-            pacman.x = nextX;
-            pacman.y = nextY;
+        // Try to continue in current direction
+        if (pacman.direction && canMoveTo(pacman.gridX, pacman.gridY, pacman.direction)) {
+            pacman.targetX = pacman.gridX + pacman.direction.x;
+            pacman.targetY = pacman.gridY + pacman.direction.y;
             pacman.moving = true;
         } else {
-            // Align to grid edge when hitting wall
-            if (pacman.direction.x > 0) pacman.x = Math.floor(pacman.x + 0.5);
-            else if (pacman.direction.x < 0) pacman.x = Math.ceil(pacman.x - 0.5);
-            if (pacman.direction.y > 0) pacman.y = Math.floor(pacman.y + 0.5);
-            else if (pacman.direction.y < 0) pacman.y = Math.ceil(pacman.y - 0.5);
             pacman.moving = false;
         }
-    } else {
-        pacman.moving = false;
     }
     
-    // Collect pellets
+    // Collect pellets (check current grid cell)
     for (let i = pellets.length - 1; i >= 0; i--) {
         const pellet = pellets[i];
-        if (Math.abs(pacman.x - pellet.x) < 0.5 && 
-            Math.abs(pacman.y - pellet.y) < 0.5) {
+        if (pellet.x === pacman.gridX && pellet.y === pacman.gridY) {
             pellets.splice(i, 1);
             score += 10;
             document.querySelector('.score').textContent = score;
@@ -285,59 +262,55 @@ function updatePacman() {
 
 function updateGhosts() {
     ghosts.forEach(ghost => {
-        ghost.moveTimer++;
+        // Smooth movement towards target
+        const dx = ghost.targetX - ghost.x;
+        const dy = ghost.targetY - ghost.y;
         
-        // Update grid position
-        ghost.gridX = Math.round(ghost.x);
-        ghost.gridY = Math.round(ghost.y);
-        
-        // Change direction at grid centers
-        const atCenter = Math.abs(ghost.x - ghost.gridX) < 0.1 && 
-                        Math.abs(ghost.y - ghost.gridY) < 0.1;
-        
-        if (atCenter && ghost.moveTimer > 10) {
-            ghost.moveTimer = 0;
+        if (Math.abs(dx) > 0.01 || Math.abs(dy) > 0.01) {
+            // Still moving to target
+            ghost.x += dx * ghost.speed * 2;
+            ghost.y += dy * ghost.speed * 2;
+        } else {
+            // Reached target cell
+            ghost.x = ghost.targetX;
+            ghost.y = ghost.targetY;
+            ghost.gridX = ghost.targetX;
+            ghost.gridY = ghost.targetY;
             
-            // Get possible directions
+            // Choose new direction
             const directions = Object.values(DIRECTIONS);
             const possible = directions.filter(dir => {
-                // Don't reverse
+                // Don't reverse immediately
                 if (ghost.direction && 
                     dir.x === -ghost.direction.x && 
                     dir.y === -ghost.direction.y) {
                     return false;
                 }
-                // Check if can move in this direction
-                const nextX = ghost.gridX + dir.x;
-                const nextY = ghost.gridY + dir.y;
-                return nextX >= 0 && nextX < COLS && 
-                       nextY >= 0 && nextY < ROWS && 
-                       grid[nextY][nextX] !== 1;
+                return canMoveTo(ghost.gridX, ghost.gridY, dir);
             });
             
-            // Choose random direction
             if (possible.length > 0) {
-                ghost.direction = possible[Math.floor(Math.random() * possible.length)];
-            } else if (ghost.direction) {
-                // Reverse if stuck
+                // Random direction change (30% chance to change at intersection)
+                if (Math.random() < 0.3 || !canMoveTo(ghost.gridX, ghost.gridY, ghost.direction)) {
+                    ghost.direction = possible[Math.floor(Math.random() * possible.length)];
+                }
+            } else {
+                // Can only reverse
                 ghost.direction = {
                     x: -ghost.direction.x,
                     y: -ghost.direction.y
                 };
             }
+            
+            // Set new target if can move
+            if (ghost.direction && canMoveTo(ghost.gridX, ghost.gridY, ghost.direction)) {
+                ghost.targetX = ghost.gridX + ghost.direction.x;
+                ghost.targetY = ghost.gridY + ghost.direction.y;
+            }
         }
         
-        // Move ghost
-        if (ghost.direction) {
-            ghost.x += ghost.direction.x * ghost.speed;
-            ghost.y += ghost.direction.y * ghost.speed;
-        }
-        
-        // Check collision with pacman
-        if (Math.abs(ghost.gridX - pacman.gridX) <= 0 && 
-            Math.abs(ghost.gridY - pacman.gridY) <= 0 &&
-            Math.abs(ghost.x - pacman.x) < 0.8 && 
-            Math.abs(ghost.y - pacman.y) < 0.8) {
+        // Check collision with pacman (grid-based)
+        if (ghost.gridX === pacman.gridX && ghost.gridY === pacman.gridY) {
             loseLife();
         }
     });
@@ -367,7 +340,7 @@ function updateLives() {
 function nextLevel() {
     // Increase ghost speed
     ghosts.forEach(ghost => {
-        ghost.speed = Math.min(ghost.speed * 1.1, 0.15);
+        ghost.speed = Math.min(ghost.speed * 1.2, 0.1);
     });
     resetLevel();
 }
