@@ -292,6 +292,10 @@
       const t = this.tile;
       return t.y >= 12 && t.y <= 16 && t.x >= 11 && t.x <= 16; // around the center box
     }
+    
+    shouldLeaveHouse() {
+      return this.leaveHouseTimer <= 0 && this.isInHouse() && !this.eyeOnly;
+    }
     update(dt, pacman) {
       // Mode switching timer
       this.modeTimer += dt;
@@ -329,9 +333,16 @@
           this.path = [];
           this.mode = 'chase';
         }
+      } else if (this.shouldLeaveHouse()) {
+        // Force ghosts to leave the house by targeting the exit
+        target = { x: 14, y: 11 }; // Exit point above the house
       } else if (this.frightened) {
-        // Random movement when frightened
-        target = { x: Math.floor(Math.random() * COLS), y: Math.floor(Math.random() * ROWS) };
+        // Random movement when frightened, but avoid walls
+        let attempts = 0;
+        do {
+          target = { x: Math.floor(Math.random() * COLS), y: Math.floor(Math.random() * ROWS) };
+          attempts++;
+        } while (!isPassable(target.x, target.y, true) && attempts < 10);
         this.mode = 'frightened';
       } else if (this.mode === 'scatter') {
         target = this.scatterTarget;
@@ -351,23 +362,69 @@
       // Recalculate path occasionally at intersections or when target changed
       this.pathRecalcCooldown -= dt;
       const t = this.tile;
-      if (this.path.length === 0 || this.pathRecalcCooldown <= 0 || isIntersection(t.x, t.y)) {
-        // Ensure target is within bounds
+      const needsRecalc = this.path.length === 0 || 
+                         this.pathRecalcCooldown <= 0 || 
+                         (isIntersection(t.x, t.y) && this.atCenterOfTile());
+      
+      if (needsRecalc) {
+        // Ensure target is within bounds and passable
         target.x = clamp(target.x, 0, COLS - 1);
         target.y = clamp(target.y, 0, ROWS - 1);
+        
+        // If target is not passable, find nearest passable tile
+        if (!isPassable(target.x, target.y, true)) {
+          let found = false;
+          for (let radius = 1; radius <= 5 && !found; radius++) {
+            for (let dx = -radius; dx <= radius && !found; dx++) {
+              for (let dy = -radius; dy <= radius && !found; dy++) {
+                const nx = target.x + dx;
+                const ny = target.y + dy;
+                if (isPassable(nx, ny, true)) {
+                  target.x = clamp(nx, 0, COLS - 1);
+                  target.y = clamp(ny, 0, ROWS - 1);
+                  found = true;
+                }
+              }
+            }
+          }
+        }
+        
         this.path = aStar(t, target, true);
-        this.pathRecalcCooldown = 0.15 + Math.random() * 0.1;
+        this.pathRecalcCooldown = this.frightened ? 0.05 : 0.2; // Faster recalc when frightened
       }
       
       // Follow path
       if (this.path.length > 0) {
         const next = this.path[0];
         const center = tileCenter(t.x, t.y);
-        // Set direction toward next tile when centered
-        if (Math.abs(this.x - center.x) < 0.5 && Math.abs(this.y - center.y) < 0.5) {
-          this.dir = { x: Math.sign(next.x - t.x), y: Math.sign(next.y - t.y) };
-          // When we reach next tile, pop it
-          if (t.x === next.x && t.y === next.y) this.path.shift();
+        
+        // Set direction toward next tile when centered or close to centered
+        if (Math.abs(this.x - center.x) < 2 && Math.abs(this.y - center.y) < 2) {
+          const newDir = { x: Math.sign(next.x - t.x), y: Math.sign(next.y - t.y) };
+          
+          // Only change direction if it's different and valid
+          if ((newDir.x !== this.dir.x || newDir.y !== this.dir.y) && 
+              isPassable(next.x, next.y, true)) {
+            this.dir = newDir;
+          }
+          
+          // When we reach next tile, pop it from path
+          if (t.x === next.x && t.y === next.y) {
+            this.path.shift();
+          }
+        }
+      } else {
+        // No path available, try to move toward target directly
+        if (this.atCenterOfTile() && target) {
+          const dx = Math.sign(target.x - t.x);
+          const dy = Math.sign(target.y - t.y);
+          
+          // Prefer horizontal movement if both directions possible
+          if (dx !== 0 && isPassable(t.x + dx, t.y, true)) {
+            this.dir = { x: dx, y: 0 };
+          } else if (dy !== 0 && isPassable(t.x, t.y + dy, true)) {
+            this.dir = { x: 0, y: dy };
+          }
         }
       }
 
@@ -393,39 +450,67 @@
 
   // A* pathfinding on the tile grid
   function aStar(start, goal, forGhost) {
+    // Validate inputs
+    if (!isInside(start.x, start.y) || !isInside(goal.x, goal.y)) return [];
+    if (start.x === goal.x && start.y === goal.y) return [];
+    
     function key(x, y) { return x + ',' + y; }
     const open = new Set([key(start.x, start.y)]);
+    const closed = new Set();
     const cameFrom = new Map();
     const g = new Map([[key(start.x, start.y), 0]]);
     const f = new Map([[key(start.x, start.y), heuristic(start, goal)]]);
 
-    function heuristic(a, b) { return Math.abs(a.x - b.x) + Math.abs(a.y - b.y); }
+    function heuristic(a, b) { 
+      // Manhattan distance with slight preference for direct paths
+      const dx = Math.abs(a.x - b.x);
+      const dy = Math.abs(a.y - b.y);
+      return dx + dy + Math.min(dx, dy) * 0.01;
+    }
 
     function lowestF() {
-      let bestKey=null; let best = Infinity;
-      for (const k of open) { const v = f.get(k) ?? Infinity; if (v < best) { best = v; bestKey = k; } }
+      let bestKey = null;
+      let best = Infinity;
+      for (const k of open) { 
+        const v = f.get(k) ?? Infinity; 
+        if (v < best) { 
+          best = v; 
+          bestKey = k; 
+        } 
+      }
       return bestKey;
     }
 
-    while (open.size) {
+    let iterations = 0;
+    const maxIterations = COLS * ROWS; // Prevent infinite loops
+    
+    while (open.size && iterations < maxIterations) {
+      iterations++;
       const currentKey = lowestF();
+      if (!currentKey) break;
+      
       const [cx, cy] = currentKey.split(',').map(Number);
       const current = { x: cx, y: cy };
+      
       if (cx === goal.x && cy === goal.y) {
         return reconstructPath(cameFrom, current);
       }
+      
       open.delete(currentKey);
+      closed.add(currentKey);
+      
       const neighbors = [
         { x: cx + 1, y: cy },
         { x: cx - 1, y: cy },
         { x: cx, y: cy + 1 },
         { x: cx, y: cy - 1 },
-      ].filter(n => isPassable(n.x, n.y, forGhost));
+      ].filter(n => isPassable(n.x, n.y, forGhost) && !closed.has(key(n.x, n.y)));
 
       for (const n of neighbors) {
         const nk = key(n.x, n.y);
         const tentative = (g.get(currentKey) ?? Infinity) + 1;
-        if (tentative < (g.get(nk) ?? Infinity)) {
+        
+        if (!open.has(nk) || tentative < (g.get(nk) ?? Infinity)) {
           cameFrom.set(nk, currentKey);
           g.set(nk, tentative);
           f.set(nk, tentative + heuristic(n, goal));
@@ -433,7 +518,7 @@
         }
       }
     }
-    return [];
+    return []; // No path found
   }
 
   function reconstructPath(cameFrom, current)
@@ -520,16 +605,18 @@
   }
 
   // Game setup
-  const pacman = new Pacman(14, 23);
+  const pacman = new Pacman(14, 26); // Start in bottom corridor
   const ghosts = [
-    new Ghost('blinky', '#ff0000', 14, 14),
-    new Ghost('pinky',  '#ffb8ff', 13, 14),
-    new Ghost('inky',   '#00ffff', 15, 14),
-    new Ghost('clyde',  '#ffb852', 14, 15),
+    new Ghost('blinky', '#ff0000', 14, 14),  // Red - starts outside, no delay
+    new Ghost('pinky',  '#ffb8ff', 13, 14),  // Pink - in house
+    new Ghost('inky',   '#00ffff', 15, 14),  // Cyan - in house  
+    new Ghost('clyde',  '#ffb852', 14, 15),  // Orange - in house
   ];
-  ghosts[1].setHouseDelay(2.5);
-  ghosts[2].setHouseDelay(5);
-  ghosts[3].setHouseDelay(7.5);
+  // Blinky starts immediately, others have delays
+  ghosts[0].setHouseDelay(0);    // Blinky starts moving right away
+  ghosts[1].setHouseDelay(2.5);  // Pinky waits 2.5 seconds
+  ghosts[2].setHouseDelay(5.0);  // Inky waits 5 seconds
+  ghosts[3].setHouseDelay(7.5);  // Clyde waits 7.5 seconds
 
   function pelletEaten() {
     if (state.dotsRemaining <= 0) {
@@ -553,9 +640,18 @@
   }
 
   function resetPositions() {
-    const p = tileCenter(14, 23); pacman.x = p.x; pacman.y = p.y; pacman.dir = {x:0,y:0}; pacman.nextDir = {x:0,y:0};
+    const p = tileCenter(14, 26); pacman.x = p.x; pacman.y = p.y; pacman.dir = {x:0,y:0}; pacman.nextDir = {x:0,y:0};
     const gpos = [ [14,14],[13,14],[15,14],[14,15] ];
-    ghosts.forEach((g,i)=>{ const c = tileCenter(gpos[i][0], gpos[i][1]); g.x=c.x; g.y=c.y; g.dir={x:0,y:0}; g.nextDir={x:0,y:0}; g.eyeOnly=false; g.frightened=false; g.speed=GHOST_SPEED; });
+    ghosts.forEach((g,i)=>{
+      const c = tileCenter(gpos[i][0], gpos[i][1]); 
+      g.x=c.x; g.y=c.y; 
+      g.dir={x:0,y:0}; g.nextDir={x:0,y:0}; 
+      g.eyeOnly=false; g.frightened=false; g.speed=GHOST_SPEED;
+      g.path = []; // Clear any existing path
+      g.mode = 'chase';
+      g.modeTimer = 0;
+      g.pathRecalcCooldown = 0;
+    });
   }
 
   function resetLevel(newLevel=false) {
@@ -570,11 +666,11 @@
       }
     }
     resetPositions();
-    if (newLevel) {
-      ghosts[1].setHouseDelay(2.0);
-      ghosts[2].setHouseDelay(4.0);
-      ghosts[3].setHouseDelay(6.0);
-    }
+    // Reset house delays - Blinky starts immediately, others have staggered delays
+    ghosts[0].setHouseDelay(0);    // Blinky starts moving right away
+    ghosts[1].setHouseDelay(newLevel ? 2.0 : 2.5);  
+    ghosts[2].setHouseDelay(newLevel ? 4.0 : 5.0);  
+    ghosts[3].setHouseDelay(newLevel ? 6.0 : 7.5);
   }
 
   function loseLife() {
