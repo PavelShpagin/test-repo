@@ -19,6 +19,8 @@
   const livesEl = document.getElementById('lives');
   const overlay = document.getElementById('overlay');
   const startBtn = document.getElementById('startBtn');
+  const overlayTitle = overlay.querySelector('.panel h1');
+  const overlayMsg = overlay.querySelector('.panel p');
 
   // Grid constants
   const COLS = 28; // classic width
@@ -37,6 +39,7 @@
 
   // Timers
   const FRIGHTENED_TIME = 6000; // ms
+  const COLLISION_RADIUS_FACTOR = 0.5; // softer ghost collision
 
   // State
   const state = {
@@ -148,6 +151,10 @@
       if (this.dir.x !== 0 && Math.sign(center.x - this.x) !== Math.sign(this.dir.x)) this.x = center.x;
       if (this.dir.y !== 0 && Math.sign(center.y - this.y) !== Math.sign(this.dir.y)) this.y = center.y;
 
+      // Keep entity aligned to corridor to avoid getting stuck against walls
+      if (this.dir.x !== 0) this.y = center.y;
+      if (this.dir.y !== 0) this.x = center.x;
+
       if (this.atCenterOfTile()) {
         // Change direction at intersections
         if (this.nextDir.x || this.nextDir.y) {
@@ -208,7 +215,7 @@
       if (v === POWER) { grid[ty][tx] = EMPTY; state.score += 50; state.dotsRemaining--; triggerFrightened(); pelletEaten(); }
     }
     draw() {
-      const radius = TILE * 0.45;
+      const radius = TILE * 0.40;
       ctx.save();
       ctx.translate(this.x, this.y);
       const angle = Math.atan2(this.dir.y, this.dir.x) || 0;
@@ -433,7 +440,7 @@
     draw() {
       ctx.save();
       ctx.translate(this.x, this.y);
-      const r = TILE * 0.45;
+      const r = TILE * 0.40;
       if (this.eyeOnly) {
         drawEyes(0, 0, r * 0.9, '#fff');
         ctx.restore();
@@ -620,9 +627,11 @@
 
   function pelletEaten() {
     if (state.dotsRemaining <= 0) {
-      state.level++;
-      levelEl.textContent = String(state.level);
-      resetLevel(true);
+      state.running = false;
+      overlayTitle.textContent = 'You Win!';
+      overlayMsg.textContent = 'All pellets collected. Great job!';
+      startBtn.textContent = 'Play Again';
+      overlay.classList.add('show');
     }
   }
 
@@ -676,6 +685,8 @@
   function loseLife() {
     state.lives--;
     if (state.lives <= 0) {
+      overlayTitle.textContent = 'Game Over';
+      overlayMsg.textContent = 'A ghost caught you!';
       overlay.classList.add('show');
       startBtn.textContent = 'Play Again';
       state.running = false;
@@ -801,7 +812,7 @@
   function checkCollisions() {
     for (const g of ghosts) {
       const dist = Math.hypot(g.x - pacman.x, g.y - pacman.y);
-      if (dist < TILE * 0.6) {
+      if (dist < TILE * COLLISION_RADIUS_FACTOR) {
         if (g.frightened && !g.eyeOnly) {
           state.score += 200;
           g.eyeOnly = true; g.frightened = false; g.path = [];
@@ -845,6 +856,10 @@
     resetLevel(false);
     state.running = true;
     drawHUD();
+    // Reset overlay text for a fresh run
+    overlayTitle.textContent = 'Pac‑Man';
+    overlayMsg.textContent = 'Collect all pellets. Avoid ghosts unless energized!';
+    startBtn.textContent = 'Start';
   }
   startBtn.addEventListener('click', startGame);
 
