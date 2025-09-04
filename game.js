@@ -187,45 +187,120 @@ function updatePacman() {
     }
 }
 
+// BFS to find paths from ghosts to Pacman
+function findPathBFS(startX, startY, targetX, targetY) {
+    const queue = [{x: startX, y: startY, path: []}];
+    const visited = new Set();
+    visited.add(`${startX},${startY}`);
+    
+    while (queue.length > 0) {
+        const {x, y, path} = queue.shift();
+        
+        // Found target
+        if (x === targetX && y === targetY) {
+            return path;
+        }
+        
+        // Try all directions
+        for (let dir of Object.values(DIR)) {
+            const nx = x + dir.dx;
+            const ny = y + dir.dy;
+            const key = `${nx},${ny}`;
+            
+            if (nx >= 0 && nx < COLS && ny >= 0 && ny < ROWS && 
+                grid[ny][nx] !== 1 && !visited.has(key)) {
+                visited.add(key);
+                queue.push({x: nx, y: ny, path: [...path, dir]});
+            }
+        }
+    }
+    
+    return null; // No path found
+}
+
 function updateGhosts() {
-    ghosts.forEach(g => {
+    // Get Pacman's grid position
+    const pacX = Math.round(pacman.x);
+    const pacY = Math.round(pacman.y);
+    
+    ghosts.forEach((g, index) => {
         g.timer++;
         
-        // Change direction at intersections
+        // Only update direction at grid centers
         const nearCenter = Math.abs(g.x - Math.round(g.x)) < 0.1 && 
                           Math.abs(g.y - Math.round(g.y)) < 0.1;
         
         if (nearCenter && g.timer > 10) {
-            const dirs = Object.values(DIR);
-            const valid = dirs.filter(d => {
-                // No reverse
-                if (g.dir && d.dx === -g.dir.dx && d.dy === -g.dir.dy) {
-                    return false;
-                }
-                return canMove(Math.round(g.x), Math.round(g.y), d);
-            });
+            const gx = Math.round(g.x);
+            const gy = Math.round(g.y);
             
-            if (valid.length > 0) {
-                if (Math.random() < 0.3 || !canMove(g.x, g.y, g.dir)) {
-                    g.dir = valid[Math.floor(Math.random() * valid.length)];
+            // Find path to Pacman using BFS
+            const path = findPathBFS(gx, gy, pacX, pacY);
+            
+            if (path && path.length > 0) {
+                // Each ghost takes a different path choice
+                // Ghost 0: shortest path (first move)
+                // Ghost 1: second best if available
+                // Ghost 2: third best, etc.
+                
+                // Get all valid first moves
+                const validFirstMoves = [];
+                for (let dir of Object.values(DIR)) {
+                    const nx = gx + dir.dx;
+                    const ny = gy + dir.dy;
+                    
+                    // Don't reverse
+                    if (g.dir && dir.dx === -g.dir.dx && dir.dy === -g.dir.dy) {
+                        continue;
+                    }
+                    
+                    if (nx >= 0 && nx < COLS && ny >= 0 && ny < ROWS && grid[ny][nx] !== 1) {
+                        // Calculate distance from this move to Pacman
+                        const dist = Math.abs(nx - pacX) + Math.abs(ny - pacY);
+                        validFirstMoves.push({dir, dist});
+                    }
+                }
+                
+                // Sort by distance (shortest first)
+                validFirstMoves.sort((a, b) => a.dist - b.dist);
+                
+                // Each ghost picks a different preference
+                const choice = Math.min(index, validFirstMoves.length - 1);
+                if (validFirstMoves[choice]) {
+                    g.dir = validFirstMoves[choice].dir;
                     g.timer = 0;
                 }
             } else {
-                // Reverse if stuck
-                g.dir = { dx: -g.dir.dx, dy: -g.dir.dy };
-                g.timer = 0;
+                // No path found or same position - pick random valid direction
+                const dirs = Object.values(DIR);
+                const valid = dirs.filter(d => {
+                    if (g.dir && d.dx === -g.dir.dx && d.dy === -g.dir.dy) {
+                        return false;
+                    }
+                    return canMove(gx, gy, d);
+                });
+                
+                if (valid.length > 0) {
+                    g.dir = valid[Math.floor(Math.random() * valid.length)];
+                    g.timer = 0;
+                } else if (g.dir) {
+                    // Must reverse
+                    g.dir = { dx: -g.dir.dx, dy: -g.dir.dy };
+                    g.timer = 0;
+                }
             }
         }
         
-        // Move
+        // Move ghost
         if (g.dir && canMove(g.x, g.y, g.dir)) {
-            g.x += g.dir.dx * 0.05;
-            g.y += g.dir.dy * 0.05;
+            // Vary speed slightly per ghost
+            const speed = 0.05 + (index * 0.002);
+            g.x += g.dir.dx * speed;
+            g.y += g.dir.dy * speed;
         }
         
         // Check collision
-        if (Math.round(g.x) === Math.round(pacman.x) && 
-            Math.round(g.y) === Math.round(pacman.y)) {
+        if (Math.round(g.x) === pacX && Math.round(g.y) === pacY) {
             loseLife();
         }
     });
