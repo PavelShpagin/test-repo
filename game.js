@@ -97,7 +97,8 @@ function resetLevel() {
                     y: y,
                     dir: DIR.UP,
                     color: GHOST_COLORS[ghosts.length],
-                    timer: 0
+                    timer: 0,
+                    hasLeftBase: false
                 });
                 grid[y][x] = 0;
             }
@@ -318,22 +319,69 @@ function updateGhosts() {
             const gx = Math.round(g.x);
             const gy = Math.round(g.y);
             
-            // Find strategic path for this ghost
-            const nextMove = findStrategicPaths(gx, gy, pacX, pacY, index);
+            // Check if ghost just left the base (around row 10, moving up)
+            if (!g.hasLeftBase && gy <= 10 && gy >= 8) {
+                // Check if we're at the exit point (row 10, center area)
+                if (gy === 10 && gx >= 8 && gx <= 10) {
+                    g.hasLeftBase = true;
+                    
+                    // Blue ghost (index 1) turns left, Orange (index 3) turns right
+                    if (index === 1) {
+                        g.dir = DIR.LEFT;
+                        g.timer = 0;
+                    } else if (index === 3) {
+                        g.dir = DIR.RIGHT;
+                        g.timer = 0;
+                    }
+                    // Red (0) and Pink (2) continue with normal pathfinding
+                }
+            }
             
-            if (nextMove) {
-                // Check if it's not a reverse (unless no choice)
-                if (!g.dir || !(nextMove.dx === -g.dir.dx && nextMove.dy === -g.dir.dy)) {
-                    g.dir = nextMove;
-                    g.timer = 0;
+            // Skip strategic pathfinding if we just did an initial turn
+            if ((index === 1 || index === 3) && g.timer === 0) {
+                // Just set the initial direction, skip pathfinding this frame
+            } else {
+                // Find strategic path for this ghost
+                const nextMove = findStrategicPaths(gx, gy, pacX, pacY, index);
+                
+                if (nextMove) {
+                    // Check if it's not a reverse (unless no choice)
+                    if (!g.dir || !(nextMove.dx === -g.dir.dx && nextMove.dy === -g.dir.dy)) {
+                        g.dir = nextMove;
+                        g.timer = 0;
+                    } else {
+                        // Try to find alternative that's not reverse
+                        const validDirs = [];
+                        for (let dir of Object.values(DIR)) {
+                            const nx = gx + dir.dx;
+                            const ny = gy + dir.dy;
+                            
+                            if (dir.dx === -g.dir.dx && dir.dy === -g.dir.dy) continue;
+                            
+                            if (nx >= 0 && nx < COLS && ny >= 0 && ny < ROWS && grid[ny][nx] !== 1) {
+                                validDirs.push(dir);
+                            }
+                        }
+                        
+                        if (validDirs.length > 0) {
+                            g.dir = validDirs[0];
+                        } else {
+                            // Must reverse
+                            g.dir = nextMove;
+                        }
+                        g.timer = 0;
+                    }
                 } else {
-                    // Try to find alternative that's not reverse
+                    // No path found (shouldn't happen) - find any valid move
                     const validDirs = [];
                     for (let dir of Object.values(DIR)) {
                         const nx = gx + dir.dx;
                         const ny = gy + dir.dy;
                         
-                        if (dir.dx === -g.dir.dx && dir.dy === -g.dir.dy) continue;
+                        // Don't reverse unless necessary
+                        if (g.dir && dir.dx === -g.dir.dx && dir.dy === -g.dir.dy) {
+                            continue;
+                        }
                         
                         if (nx >= 0 && nx < COLS && ny >= 0 && ny < ROWS && grid[ny][nx] !== 1) {
                             validDirs.push(dir);
@@ -341,38 +389,14 @@ function updateGhosts() {
                     }
                     
                     if (validDirs.length > 0) {
+                        // Take first valid direction (deterministic)
                         g.dir = validDirs[0];
-                    } else {
+                    } else if (g.dir) {
                         // Must reverse
-                        g.dir = nextMove;
+                        g.dir = { dx: -g.dir.dx, dy: -g.dir.dy };
                     }
                     g.timer = 0;
                 }
-            } else {
-                // No path found (shouldn't happen) - find any valid move
-                const validDirs = [];
-                for (let dir of Object.values(DIR)) {
-                    const nx = gx + dir.dx;
-                    const ny = gy + dir.dy;
-                    
-                    // Don't reverse unless necessary
-                    if (g.dir && dir.dx === -g.dir.dx && dir.dy === -g.dir.dy) {
-                        continue;
-                    }
-                    
-                    if (nx >= 0 && nx < COLS && ny >= 0 && ny < ROWS && grid[ny][nx] !== 1) {
-                        validDirs.push(dir);
-                    }
-                }
-                
-                if (validDirs.length > 0) {
-                    // Take first valid direction (deterministic)
-                    g.dir = validDirs[0];
-                } else if (g.dir) {
-                    // Must reverse
-                    g.dir = { dx: -g.dir.dx, dy: -g.dir.dy };
-                }
-                g.timer = 0;
             }
         }
         
