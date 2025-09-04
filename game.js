@@ -163,12 +163,23 @@ const DIR = {
 };
 
 function selectRandomMap() {
-    currentMapIndex = Math.floor(Math.random() * MAPS.length);
+    // Store previous index
+    const previousIndex = currentMapIndex;
+    
+    // If we have more than one map, ensure we select a different one
+    if (MAPS.length > 1) {
+        do {
+            currentMapIndex = Math.floor(Math.random() * MAPS.length);
+        } while (currentMapIndex === previousIndex);
+    } else {
+        currentMapIndex = Math.floor(Math.random() * MAPS.length);
+    }
+    
     MAZE = MAPS[currentMapIndex];
     ROWS = MAZE.length;
     COLS = MAZE[0].length;
     
-    console.log(`Selected Map ${currentMapIndex + 1} of ${MAPS.length}`);
+    console.log(`Selected Map ${currentMapIndex + 1} of ${MAPS.length} (was Map ${previousIndex + 1})`);
     console.log(`Map dimensions: ${COLS}x${ROWS}`);
     
     // Resize canvas if needed

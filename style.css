@@ -46,21 +46,44 @@ body {
     background: #2a2a2a;
     border: 2px solid #444;
     border-radius: 8px;
-    color: #fff;
-    font-size: 20px;
-    padding: 4px 12px;
+    padding: 8px;
     cursor: pointer;
-    transition: all 0.2s;
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 40px;
+    min-height: 40px;
+}
+
+.reload-btn svg {
+    width: 24px;
+    height: 24px;
+    transition: transform 0.3s ease;
 }
 
 .reload-btn:hover {
     background: #3a3a3a;
     border-color: #ffd700;
-    transform: rotate(180deg);
+    box-shadow: 0 0 10px rgba(255, 215, 0, 0.3);
+}
+
+.reload-btn:hover svg {
+    transform: rotate(360deg);
 }
 
 .reload-btn:active {
-    transform: rotate(180deg) scale(0.95);
+    transform: scale(0.95);
+    background: #1a1a1a;
+}
+
+.reload-btn:active svg {
+    transform: rotate(360deg);
+}
+
+.reload-btn:focus {
+    outline: 2px solid #ffd700;
+    outline-offset: 2px;
 }
 
 .lives {
