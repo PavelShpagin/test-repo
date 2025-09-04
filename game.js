@@ -216,9 +216,8 @@ function init() {
     // Log all maps on initialization
     logAllMaps();
     
-    // Don't select a random map on init, just set canvas size
-    canvas.width = COLS * CELL_SIZE;
-    canvas.height = ROWS * CELL_SIZE;
+    // Select a random map on page load
+    selectRandomMap();
     
     // Initialize score display
     document.querySelector('.score').textContent = score;
