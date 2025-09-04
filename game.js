@@ -727,4 +727,27 @@ function resetGame() {
     gameLoop();
 }
 
+function reloadMap() {
+    // Stop current game
+    gameRunning = false;
+    
+    // Select a new random map
+    selectRandomMap();
+    
+    // Reset game state completely
+    score = 0;
+    lives = 3;
+    document.querySelector('.score').textContent = score;
+    
+    // Hide any screens that might be showing
+    document.getElementById('start-screen').classList.add('hidden');
+    document.getElementById('game-over').classList.add('hidden');
+    
+    // Reset level and start game
+    resetLevel();
+    updateLivesDisplay();
+    gameRunning = true;
+    gameLoop();
+}
+
 window.addEventListener('load', init);

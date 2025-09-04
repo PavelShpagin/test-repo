@@ -42,6 +42,27 @@ body {
     color: #ffd700;
 }
 
+.reload-btn {
+    background: #2a2a2a;
+    border: 2px solid #444;
+    border-radius: 8px;
+    color: #fff;
+    font-size: 20px;
+    padding: 4px 12px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.reload-btn:hover {
+    background: #3a3a3a;
+    border-color: #ffd700;
+    transform: rotate(180deg);
+}
+
+.reload-btn:active {
+    transform: rotate(180deg) scale(0.95);
+}
+
 .lives {
     display: flex;
     gap: 8px;
