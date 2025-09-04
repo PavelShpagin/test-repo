@@ -218,91 +218,87 @@ function findShortestPath(startX, startY, targetX, targetY) {
 
 // Find paths with strategic divergence points for each ghost
 function findStrategicPaths(startX, startY, targetX, targetY, ghostIndex) {
-    // First, find the absolute shortest path
+    // First, find the absolute shortest path from current position
     const shortestPath = findShortestPath(startX, startY, targetX, targetY);
     
     if (!shortestPath || shortestPath.length === 0) {
         return null;
     }
     
-    // Ghost 0: Take the shortest path
+    // Ghost 0: Always take the direct shortest path
     if (ghostIndex === 0) {
         return shortestPath[0];
     }
     
-    // For other ghosts, find paths that diverge at specific points
-    // Ghost 1: Different last move
-    // Ghost 2: Different second-to-last move
-    // Ghost 3: Different third-to-last move
+    // For other ghosts, find alternative paths that diverge at specific steps:
+    // Ghost 1: Take different FIRST move, then shortest from there
+    // Ghost 2: Follow shortest for 1 move, then different SECOND move, then shortest
+    // Ghost 3: Follow shortest for 2 moves, then different THIRD move, then shortest
     
-    const divergencePoint = Math.min(ghostIndex, shortestPath.length);
+    // Build the full alternative path
+    const alternativePath = [];
+    const divergeAtStep = ghostIndex; // Ghost 1 diverges at step 1, Ghost 2 at step 2, etc.
     
-    // Find all paths and filter for ones that diverge at the right point
-    const allPaths = [];
-    const maxLength = shortestPath.length + 2; // Allow slightly longer paths
+    // Follow the shortest path up to (but not including) the divergence point
+    let currentX = startX;
+    let currentY = startY;
     
-    function dfs(x, y, path, visited) {
-        if (path.length > maxLength) return;
-        
-        if (x === targetX && y === targetY) {
-            allPaths.push([...path]);
-            return;
-        }
-        
-        for (let dir of Object.values(DIR)) {
-            const nx = x + dir.dx;
-            const ny = y + dir.dy;
-            const key = `${nx},${ny}`;
-            
-            if (nx >= 0 && nx < COLS && ny >= 0 && ny < ROWS && 
-                grid[ny][nx] !== 1 && !visited.has(key)) {
-                visited.add(key);
-                path.push(dir);
-                dfs(nx, ny, path, visited);
-                path.pop();
-                visited.delete(key);
-            }
-        }
+    for (let step = 0; step < divergeAtStep - 1 && step < shortestPath.length; step++) {
+        alternativePath.push(shortestPath[step]);
+        currentX += shortestPath[step].dx;
+        currentY += shortestPath[step].dy;
     }
     
-    const visited = new Set();
-    visited.add(`${startX},${startY}`);
-    dfs(startX, startY, [], visited);
+    // Now we're at the position where we need to diverge
+    // Find all valid directions that are NOT the shortest path direction
+    const shortestNextMove = shortestPath[divergeAtStep - 1];
+    let bestAlternative = null;
+    let bestTotalLength = Infinity;
     
-    // Sort paths by length
-    allPaths.sort((a, b) => a.length - b.length);
-    
-    // Find a path that diverges at the specified point from the end
-    for (const path of allPaths) {
-        if (path.length === 0) continue;
-        
-        // Check if this path diverges at the right point
-        const checkIndex = path.length - divergencePoint;
-        if (checkIndex >= 0 && checkIndex < path.length) {
-            // For divergence, check if the move at this point differs from shortest path
-            const shortestCheckIndex = shortestPath.length - divergencePoint;
+    if (shortestNextMove) {
+        for (let dir of Object.values(DIR)) {
+            const nx = currentX + dir.dx;
+            const ny = currentY + dir.dy;
             
-            if (shortestCheckIndex >= 0 && shortestCheckIndex < shortestPath.length) {
-                const pathMove = path[checkIndex];
-                const shortestMove = shortestPath[shortestCheckIndex];
+            // Skip the shortest path direction at this divergence point
+            if (dir.dx === shortestNextMove.dx && dir.dy === shortestNextMove.dy) {
+                continue;
+            }
+            
+            // Check if this direction is valid
+            if (nx >= 0 && nx < COLS && ny >= 0 && ny < ROWS && grid[ny][nx] !== 1) {
+                // Find shortest path from this alternative position to target
+                const pathFromAlt = findShortestPath(nx, ny, targetX, targetY);
                 
-                // If moves differ at this point, this is a good alternative path
-                if (pathMove.dx !== shortestMove.dx || pathMove.dy !== shortestMove.dy) {
-                    return path[0]; // Return first move of this path
+                if (pathFromAlt) {
+                    const totalLength = alternativePath.length + 1 + pathFromAlt.length;
+                    
+                    if (totalLength < bestTotalLength) {
+                        bestTotalLength = totalLength;
+                        bestAlternative = [...alternativePath, dir, ...pathFromAlt];
+                    }
                 }
             }
         }
     }
     
-    // Fallback: return any different first move from shortest path
-    for (const path of allPaths) {
-        if (path.length > 0 && 
-            (path[0].dx !== shortestPath[0].dx || path[0].dy !== shortestPath[0].dy)) {
-            return path[0];
+    // Return the first move of the best alternative path, or shortest if no alternative
+    if (bestAlternative && bestAlternative.length > 0) {
+        return bestAlternative[0];
+    }
+    
+    // Fallback: if can't diverge at specified point, try to take any different first move
+    for (let dir of Object.values(DIR)) {
+        const nx = startX + dir.dx;
+        const ny = startY + dir.dy;
+        
+        if (nx >= 0 && nx < COLS && ny >= 0 && ny < ROWS && grid[ny][nx] !== 1) {
+            if (dir.dx !== shortestPath[0].dx || dir.dy !== shortestPath[0].dy) {
+                return dir;
+            }
         }
     }
     
-    // Last resort: return shortest path first move
     return shortestPath[0];
 }
 
