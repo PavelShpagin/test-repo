@@ -167,6 +167,9 @@ function selectRandomMap() {
     ROWS = MAZE.length;
     COLS = MAZE[0].length;
     
+    console.log(`Selected Map ${currentMapIndex + 1} of ${MAPS.length}`);
+    console.log(`Map dimensions: ${COLS}x${ROWS}`);
+    
     // Resize canvas if needed
     if (canvas) {
         canvas.width = COLS * CELL_SIZE;
@@ -174,9 +177,44 @@ function selectRandomMap() {
     }
 }
 
+function logAllMaps() {
+    console.log("=== VERIFYING ALL 5 PACMAN MAPS ===");
+    console.log(`Total maps available: ${MAPS.length}`);
+    
+    for (let i = 0; i < MAPS.length; i++) {
+        console.log(`\n=== MAP ${i + 1} ===`);
+        const map = MAPS[i];
+        console.log(`Dimensions: ${map[0].length}x${map.length}`);
+        
+        // Count elements
+        let walls = 0, corridors = 0, pacmanCount = 0, ghostCount = 0;
+        
+        // Log the actual 2D array
+        console.log("Binary representation (0=corridor, 1=wall, 2=pacman, 3=ghost):");
+        for (let y = 0; y < map.length; y++) {
+            let row = "";
+            for (let x = 0; x < map[y].length; x++) {
+                const cell = map[y][x];
+                row += cell + " ";
+                if (cell === 0) corridors++;
+                else if (cell === 1) walls++;
+                else if (cell === 2) pacmanCount++;
+                else if (cell === 3) ghostCount++;
+            }
+            console.log(row);
+        }
+        
+        console.log(`Stats: Walls=${walls}, Corridors=${corridors}, Pacman=${pacmanCount}, Ghosts=${ghostCount}`);
+    }
+    console.log("\n=== MAP VERIFICATION COMPLETE ===");
+}
+
 function init() {
     canvas = document.getElementById('game');
     ctx = canvas.getContext('2d');
+    
+    // Log all maps on initialization
+    logAllMaps();
     
     // Don't select a random map on init, just set canvas size
     canvas.width = COLS * CELL_SIZE;
