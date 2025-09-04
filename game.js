@@ -238,36 +238,42 @@ function updateGhosts() {
             const path = findPathBFS(gx, gy, pacX, pacY);
             
             if (path && path.length > 0) {
-                // Each ghost takes a different path choice
-                // Ghost 0: shortest path (first move)
-                // Ghost 1: second best if available
-                // Ghost 2: third best, etc.
+                // Use the actual BFS path!
+                // First ghost takes optimal path
+                // Other ghosts try alternate routes
                 
-                // Get all valid first moves
-                const validFirstMoves = [];
-                for (let dir of Object.values(DIR)) {
-                    const nx = gx + dir.dx;
-                    const ny = gy + dir.dy;
-                    
-                    // Don't reverse
-                    if (g.dir && dir.dx === -g.dir.dx && dir.dy === -g.dir.dy) {
-                        continue;
+                if (index === 0) {
+                    // Ghost 0: Take the optimal BFS path
+                    g.dir = path[0];
+                    g.timer = 0;
+                } else {
+                    // Other ghosts: Find alternate paths
+                    // Get all valid directions
+                    const validDirs = [];
+                    for (let dir of Object.values(DIR)) {
+                        const nx = gx + dir.dx;
+                        const ny = gy + dir.dy;
+                        
+                        // Don't reverse
+                        if (g.dir && dir.dx === -g.dir.dx && dir.dy === -g.dir.dy) {
+                            continue;
+                        }
+                        
+                        if (nx >= 0 && nx < COLS && ny >= 0 && ny < ROWS && grid[ny][nx] !== 1) {
+                            validDirs.push(dir);
+                        }
                     }
                     
-                    if (nx >= 0 && nx < COLS && ny >= 0 && ny < ROWS && grid[ny][nx] !== 1) {
-                        // Calculate distance from this move to Pacman
-                        const dist = Math.abs(nx - pacX) + Math.abs(ny - pacY);
-                        validFirstMoves.push({dir, dist});
+                    // Prefer directions that are NOT the optimal path
+                    const nonOptimal = validDirs.filter(d => d !== path[0]);
+                    
+                    if (nonOptimal.length > 0 && index <= nonOptimal.length) {
+                        // Take an alternate route
+                        g.dir = nonOptimal[Math.min(index - 1, nonOptimal.length - 1)];
+                    } else if (validDirs.length > 0) {
+                        // Fall back to any valid direction
+                        g.dir = validDirs[0];
                     }
-                }
-                
-                // Sort by distance (shortest first)
-                validFirstMoves.sort((a, b) => a.dist - b.dist);
-                
-                // Each ghost picks a different preference
-                const choice = Math.min(index, validFirstMoves.length - 1);
-                if (validFirstMoves[choice]) {
-                    g.dir = validFirstMoves[choice].dir;
                     g.timer = 0;
                 }
             } else {
