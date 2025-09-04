@@ -247,9 +247,12 @@ function updateGhosts() {
                     g.dir = path[0];
                     g.timer = 0;
                 } else {
-                    // Other ghosts: Find alternate paths
-                    // Get all valid directions
-                    const validDirs = [];
+                    // Other ghosts: Try different strategies
+                    // Ghost 1: Take second best path if available
+                    // Ghost 2+: Take alternate routes
+                    
+                    // Find all alternate paths by trying each valid first move
+                    const validMoves = [];
                     for (let dir of Object.values(DIR)) {
                         const nx = gx + dir.dx;
                         const ny = gy + dir.dy;
@@ -260,19 +263,24 @@ function updateGhosts() {
                         }
                         
                         if (nx >= 0 && nx < COLS && ny >= 0 && ny < ROWS && grid[ny][nx] !== 1) {
-                            validDirs.push(dir);
+                            // Calculate path length from this position
+                            const testPath = findPathBFS(nx, ny, pacX, pacY);
+                            const pathLength = testPath ? testPath.length : 999;
+                            validMoves.push({dir, pathLength});
                         }
                     }
                     
-                    // Prefer directions that are NOT the optimal path
-                    const nonOptimal = validDirs.filter(d => d !== path[0]);
+                    // Sort by path length
+                    validMoves.sort((a, b) => a.pathLength - b.pathLength);
                     
-                    if (nonOptimal.length > 0 && index <= nonOptimal.length) {
-                        // Take an alternate route
-                        g.dir = nonOptimal[Math.min(index - 1, nonOptimal.length - 1)];
-                    } else if (validDirs.length > 0) {
-                        // Fall back to any valid direction
-                        g.dir = validDirs[0];
+                    if (validMoves.length > 0) {
+                        // Each ghost takes a different preference
+                        // Ghost 1 takes 2nd best, Ghost 2 takes 3rd, etc.
+                        const choice = Math.min(index, validMoves.length - 1);
+                        g.dir = validMoves[choice].dir;
+                    } else {
+                        // No valid moves - shouldn't happen but handle it
+                        g.dir = { dx: -g.dir.dx, dy: -g.dir.dy };
                     }
                     g.timer = 0;
                 }
