@@ -1,5 +1,5 @@
 // Game Configuration
-const GRID = [
+const MAZE = [
     [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
     [1,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,1],
     [1,0,1,1,0,1,1,1,0,1,0,1,1,1,0,1,1,0,1],
@@ -23,335 +23,209 @@ const GRID = [
     [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1]
 ];
 
-// Constants
-const CELL_SIZE = 20;  // UI pixels per grid cell
-const ROWS = GRID.length;
-const COLS = GRID[0].length;
-const SPEED = 0.08;  // Grid units per frame
-const GHOST_SPEED = 0.06;
+const CELL_SIZE = 20;
+const ROWS = MAZE.length;
+const COLS = MAZE[0].length;
 
 // Game State
 let canvas, ctx;
 let score = 0;
 let lives = 3;
 let gameRunning = false;
-let animationFrame = 0;
+let frame = 0;
 
-// Binary grid (walls and corridors)
-let binaryGrid = [];
-
-// Entities with proper coordinate system
-let pacman = {
-    // Integer cell position (which cell am I in?)
-    cellX: 0,
-    cellY: 0,
-    
-    // Float grid coordinates (exact position in grid space)
-    floatX: 0.0,
-    floatY: 0.0,
-    
-    // Movement
-    direction: null,
-    nextDirection: null,
-    moving: false
-};
-
-let ghosts = [];
+// Binary grid
+let grid = [];
 let pellets = [];
 
-// Ghost colors
+// Pacman - position in grid units (0-18 for x, 0-20 for y)
+let pacman = {
+    x: 0,
+    y: 0,
+    dir: null,
+    nextDir: null,
+    speed: 0.1
+};
+
+// Ghosts
+let ghosts = [];
 const GHOST_COLORS = ['#ff0000', '#00ffff', '#ffb8ff', '#ffb851'];
 
 // Directions
-const DIRECTIONS = {
-    UP: { x: 0, y: -1 },
-    DOWN: { x: 0, y: 1 },
-    LEFT: { x: -1, y: 0 },
-    RIGHT: { x: 1, y: 0 }
+const DIR = {
+    UP: { dx: 0, dy: -1 },
+    DOWN: { dx: 0, dy: 1 },
+    LEFT: { dx: -1, dy: 0 },
+    RIGHT: { dx: 1, dy: 0 }
 };
 
-// Linear transformation: Grid → UI
-function gridToUI(gridCoord) {
-    return gridCoord * CELL_SIZE;
-}
-
-// Update integer cell position from float coordinates
-function updateCellPosition(entity) {
-    entity.cellX = Math.floor(entity.floatX);
-    entity.cellY = Math.floor(entity.floatY);
-}
-
-// Check if position is near cell center (for turning)
-function isNearCellCenter(floatX, floatY) {
-    const fracX = floatX - Math.floor(floatX);
-    const fracY = floatY - Math.floor(floatY);
-    return Math.abs(fracX - 0.5) < 0.3 && Math.abs(fracY - 0.5) < 0.3;
-}
-
-// Check if a cell is walkable
-function isWalkable(cellX, cellY) {
-    if (cellX < 0 || cellX >= COLS || cellY < 0 || cellY >= ROWS) {
-        return false;
-    }
-    return binaryGrid[cellY][cellX] === 0;
-}
-
-// Initialize game
 function init() {
     canvas = document.getElementById('game');
     ctx = canvas.getContext('2d');
-    
     canvas.width = COLS * CELL_SIZE;
     canvas.height = ROWS * CELL_SIZE;
     
     setupControls();
     resetLevel();
-    updateLives();
-    draw();
+    updateLivesDisplay();
+    render();
 }
 
 function resetLevel() {
-    // Initialize binary grid (0 = walkable, 1 = wall)
-    binaryGrid = GRID.map(row => row.map(cell => cell === 1 ? 1 : 0));
-    
-    // Reset entities
-    ghosts = [];
+    // Copy maze to grid
+    grid = MAZE.map(row => [...row]);
     pellets = [];
+    ghosts = [];
     
-    // Parse initial positions
+    // Setup entities
     for (let y = 0; y < ROWS; y++) {
         for (let x = 0; x < COLS; x++) {
-            const cell = GRID[y][x];
+            const cell = grid[y][x];
             
             if (cell === 0) {
-                // Add pellet
-                pellets.push({ cellX: x, cellY: y });
+                pellets.push({ x, y });
             } else if (cell === 2) {
-                // Initialize Pacman at center of cell
-                pacman.cellX = x;
-                pacman.cellY = y;
-                pacman.floatX = x + 0.5;
-                pacman.floatY = y + 0.5;
-                pacman.direction = null;
-                pacman.nextDirection = null;
-                pacman.moving = false;
-                pellets.push({ cellX: x, cellY: y });
+                pacman.x = x;
+                pacman.y = y;
+                pacman.dir = null;
+                pacman.nextDir = null;
+                grid[y][x] = 0;
+                pellets.push({ x, y });
             } else if (cell === 3) {
-                // Add ghost at center of cell
                 ghosts.push({
-                    cellX: x,
-                    cellY: y,
-                    floatX: x + 0.5,
-                    floatY: y + 0.5,
-                    direction: DIRECTIONS.UP,
-                    color: GHOST_COLORS[ghosts.length % GHOST_COLORS.length],
-                    turnCooldown: 0
+                    x: x,
+                    y: y,
+                    dir: DIR.UP,
+                    color: GHOST_COLORS[ghosts.length],
+                    timer: 0
                 });
+                grid[y][x] = 0;
             }
         }
     }
 }
 
 function setupControls() {
-    // Touch controls
+    // Touch/click controls
     document.querySelectorAll('.controls button').forEach(btn => {
-        btn.addEventListener('touchstart', (e) => {
-            e.preventDefault();
-            if (gameRunning) {
-                const dir = btn.dataset.dir;
-                pacman.nextDirection = DIRECTIONS[dir];
-            }
-        });
-        
-        btn.addEventListener('mousedown', (e) => {
-            e.preventDefault();
-            if (gameRunning) {
-                const dir = btn.dataset.dir;
-                pacman.nextDirection = DIRECTIONS[dir];
-            }
-        });
+        const setDir = () => {
+            if (!gameRunning) return;
+            const d = btn.dataset.dir;
+            pacman.nextDir = DIR[d];
+        };
+        btn.addEventListener('touchstart', e => { e.preventDefault(); setDir(); });
+        btn.addEventListener('mousedown', e => { e.preventDefault(); setDir(); });
     });
     
-    // Keyboard controls
-    document.addEventListener('keydown', (e) => {
+    // Keyboard
+    document.addEventListener('keydown', e => {
         if (!gameRunning) return;
-        
         switch(e.key) {
-            case 'ArrowUp':
-                pacman.nextDirection = DIRECTIONS.UP;
-                break;
-            case 'ArrowDown':
-                pacman.nextDirection = DIRECTIONS.DOWN;
-                break;
-            case 'ArrowLeft':
-                pacman.nextDirection = DIRECTIONS.LEFT;
-                break;
-            case 'ArrowRight':
-                pacman.nextDirection = DIRECTIONS.RIGHT;
-                break;
+            case 'ArrowUp': pacman.nextDir = DIR.UP; break;
+            case 'ArrowDown': pacman.nextDir = DIR.DOWN; break;
+            case 'ArrowLeft': pacman.nextDir = DIR.LEFT; break;
+            case 'ArrowRight': pacman.nextDir = DIR.RIGHT; break;
         }
-    });
-    
-    // Swipe controls
-    let touchStart = null;
-    
-    canvas.addEventListener('touchstart', (e) => {
-        touchStart = {
-            x: e.touches[0].clientX,
-            y: e.touches[0].clientY
-        };
-    });
-    
-    canvas.addEventListener('touchend', (e) => {
-        if (!touchStart || !gameRunning) return;
-        
-        const touchEnd = {
-            x: e.changedTouches[0].clientX,
-            y: e.changedTouches[0].clientY
-        };
-        
-        const dx = touchEnd.x - touchStart.x;
-        const dy = touchEnd.y - touchStart.y;
-        
-        if (Math.abs(dx) > Math.abs(dy)) {
-            pacman.nextDirection = dx > 0 ? DIRECTIONS.RIGHT : DIRECTIONS.LEFT;
-        } else {
-            pacman.nextDirection = dy > 0 ? DIRECTIONS.DOWN : DIRECTIONS.UP;
-        }
-        
-        touchStart = null;
     });
 }
 
+function canMove(x, y, dir) {
+    if (!dir) return false;
+    
+    // Calculate the cell we're trying to enter
+    let checkX = Math.floor(x + dir.dx * 0.5 + 0.5);
+    let checkY = Math.floor(y + dir.dy * 0.5 + 0.5);
+    
+    // Bounds check
+    if (checkX < 0 || checkX >= COLS || checkY < 0 || checkY >= ROWS) {
+        return false;
+    }
+    
+    // Wall check
+    return grid[checkY][checkX] !== 1;
+}
+
 function updatePacman() {
-    // Update cell position from float coordinates
-    const oldCellX = pacman.cellX;
-    const oldCellY = pacman.cellY;
-    updateCellPosition(pacman);
-    
-    // Try to change direction if near cell center
-    if (pacman.nextDirection && isNearCellCenter(pacman.floatX, pacman.floatY)) {
-        const nextCellX = pacman.cellX + pacman.nextDirection.x;
-        const nextCellY = pacman.cellY + pacman.nextDirection.y;
+    // Try to turn if requested
+    if (pacman.nextDir) {
+        // Check if near grid center (within 0.3 of center)
+        const dx = pacman.x - Math.round(pacman.x);
+        const dy = pacman.y - Math.round(pacman.y);
         
-        if (isWalkable(nextCellX, nextCellY)) {
-            pacman.direction = pacman.nextDirection;
-            pacman.nextDirection = null;
-            // Snap to cell center for clean turns
-            pacman.floatX = pacman.cellX + 0.5;
-            pacman.floatY = pacman.cellY + 0.5;
+        if (Math.abs(dx) < 0.3 && Math.abs(dy) < 0.3) {
+            if (canMove(Math.round(pacman.x), Math.round(pacman.y), pacman.nextDir)) {
+                pacman.dir = pacman.nextDir;
+                pacman.nextDir = null;
+                // Snap to grid for smooth turns
+                pacman.x = Math.round(pacman.x);
+                pacman.y = Math.round(pacman.y);
+            }
         }
     }
     
-    // Move in current direction
-    if (pacman.direction) {
-        // Calculate next float position
-        const nextFloatX = pacman.floatX + pacman.direction.x * SPEED;
-        const nextFloatY = pacman.floatY + pacman.direction.y * SPEED;
-        
-        // Check which cell we're moving into
-        const movingIntoCellX = Math.floor(nextFloatX + pacman.direction.x * 0.4);
-        const movingIntoCellY = Math.floor(nextFloatY + pacman.direction.y * 0.4);
-        
-        if (isWalkable(movingIntoCellX, movingIntoCellY)) {
-            // Move forward
-            pacman.floatX = nextFloatX;
-            pacman.floatY = nextFloatY;
-            pacman.moving = true;
-        } else {
-            // Hit wall - align to cell boundary
-            if (pacman.direction.x > 0) {
-                pacman.floatX = Math.floor(pacman.floatX) + 0.99;
-            } else if (pacman.direction.x < 0) {
-                pacman.floatX = Math.ceil(pacman.floatX) - 0.99;
-            }
-            if (pacman.direction.y > 0) {
-                pacman.floatY = Math.floor(pacman.floatY) + 0.99;
-            } else if (pacman.direction.y < 0) {
-                pacman.floatY = Math.ceil(pacman.floatY) - 0.99;
-            }
-            pacman.moving = false;
-        }
+    // Move forward
+    if (pacman.dir && canMove(pacman.x, pacman.y, pacman.dir)) {
+        pacman.x += pacman.dir.dx * pacman.speed;
+        pacman.y += pacman.dir.dy * pacman.speed;
     }
     
-    // Collect pellets when entering new cell
-    if (pacman.cellX !== oldCellX || pacman.cellY !== oldCellY) {
-        for (let i = pellets.length - 1; i >= 0; i--) {
-            if (pellets[i].cellX === pacman.cellX && pellets[i].cellY === pacman.cellY) {
-                pellets.splice(i, 1);
-                score += 10;
-                document.querySelector('.score').textContent = score;
-                
-                if (pellets.length === 0) {
-                    nextLevel();
-                }
-                break;
+    // Collect pellets
+    const gridX = Math.round(pacman.x);
+    const gridY = Math.round(pacman.y);
+    
+    for (let i = pellets.length - 1; i >= 0; i--) {
+        if (pellets[i].x === gridX && pellets[i].y === gridY) {
+            pellets.splice(i, 1);
+            score += 10;
+            document.querySelector('.score').textContent = score;
+            
+            if (pellets.length === 0) {
+                resetLevel(); // Next level
             }
+            break;
         }
     }
 }
 
 function updateGhosts() {
-    ghosts.forEach(ghost => {
-        // Update cell position
-        updateCellPosition(ghost);
+    ghosts.forEach(g => {
+        g.timer++;
         
-        if (ghost.turnCooldown > 0) ghost.turnCooldown--;
+        // Change direction at intersections
+        const nearCenter = Math.abs(g.x - Math.round(g.x)) < 0.1 && 
+                          Math.abs(g.y - Math.round(g.y)) < 0.1;
         
-        // Try to change direction at cell centers
-        if (isNearCellCenter(ghost.floatX, ghost.floatY) && ghost.turnCooldown === 0) {
-            const directions = Object.values(DIRECTIONS);
-            const validDirections = [];
+        if (nearCenter && g.timer > 10) {
+            const dirs = Object.values(DIR);
+            const valid = dirs.filter(d => {
+                // No reverse
+                if (g.dir && d.dx === -g.dir.dx && d.dy === -g.dir.dy) {
+                    return false;
+                }
+                return canMove(Math.round(g.x), Math.round(g.y), d);
+            });
             
-            for (let dir of directions) {
-                // Skip reverse direction
-                if (ghost.direction && 
-                    dir.x === -ghost.direction.x && 
-                    dir.y === -ghost.direction.y) {
-                    continue;
+            if (valid.length > 0) {
+                if (Math.random() < 0.3 || !canMove(g.x, g.y, g.dir)) {
+                    g.dir = valid[Math.floor(Math.random() * valid.length)];
+                    g.timer = 0;
                 }
-                
-                const nextCellX = ghost.cellX + dir.x;
-                const nextCellY = ghost.cellY + dir.y;
-                
-                if (isWalkable(nextCellX, nextCellY)) {
-                    validDirections.push(dir);
-                }
-            }
-            
-            if (validDirections.length > 0) {
-                // Check if current direction is still valid
-                const canContinue = ghost.direction && 
-                    isWalkable(ghost.cellX + ghost.direction.x, ghost.cellY + ghost.direction.y);
-                
-                // Change direction randomly or if hitting wall
-                if (!canContinue || Math.random() < 0.3) {
-                    ghost.direction = validDirections[Math.floor(Math.random() * validDirections.length)];
-                    ghost.turnCooldown = 10;
-                }
-            } else if (ghost.direction) {
-                // Can only reverse
-                ghost.direction = { x: -ghost.direction.x, y: -ghost.direction.y };
-                ghost.turnCooldown = 10;
+            } else {
+                // Reverse if stuck
+                g.dir = { dx: -g.dir.dx, dy: -g.dir.dy };
+                g.timer = 0;
             }
         }
         
-        // Move ghost
-        if (ghost.direction) {
-            const nextFloatX = ghost.floatX + ghost.direction.x * GHOST_SPEED;
-            const nextFloatY = ghost.floatY + ghost.direction.y * GHOST_SPEED;
-            
-            const movingIntoCellX = Math.floor(nextFloatX + ghost.direction.x * 0.4);
-            const movingIntoCellY = Math.floor(nextFloatY + ghost.direction.y * 0.4);
-            
-            if (isWalkable(movingIntoCellX, movingIntoCellY)) {
-                ghost.floatX = nextFloatX;
-                ghost.floatY = nextFloatY;
-            }
+        // Move
+        if (g.dir && canMove(g.x, g.y, g.dir)) {
+            g.x += g.dir.dx * 0.05;
+            g.y += g.dir.dy * 0.05;
         }
         
-        // Check collision with Pacman (same cell)
-        if (ghost.cellX === pacman.cellX && ghost.cellY === pacman.cellY) {
+        // Check collision
+        if (Math.round(g.x) === Math.round(pacman.x) && 
+            Math.round(g.y) === Math.round(pacman.y)) {
             loseLife();
         }
     });
@@ -359,116 +233,97 @@ function updateGhosts() {
 
 function loseLife() {
     lives--;
-    updateLives();
+    updateLivesDisplay();
     
     if (lives <= 0) {
-        gameOver();
+        gameRunning = false;
+        document.getElementById('final-score').textContent = score;
+        document.getElementById('game-over').classList.remove('hidden');
     } else {
         resetLevel();
     }
 }
 
-function updateLives() {
-    const livesContainer = document.querySelector('.lives');
-    livesContainer.innerHTML = '';
+function updateLivesDisplay() {
+    const container = document.querySelector('.lives');
+    container.innerHTML = '';
     for (let i = 0; i < lives; i++) {
         const life = document.createElement('div');
         life.className = 'life';
-        livesContainer.appendChild(life);
+        container.appendChild(life);
     }
 }
 
-function nextLevel() {
-    resetLevel();
-}
-
-function draw() {
-    // Clear canvas
+function render() {
+    // Clear
     ctx.fillStyle = '#000';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     
-    // Draw walls from binary grid
+    // Draw maze
     ctx.fillStyle = '#222';
     for (let y = 0; y < ROWS; y++) {
         for (let x = 0; x < COLS; x++) {
-            if (binaryGrid[y][x] === 1) {
-                ctx.fillRect(
-                    x * CELL_SIZE + 1,
-                    y * CELL_SIZE + 1,
-                    CELL_SIZE - 2,
-                    CELL_SIZE - 2
-                );
+            if (grid[y][x] === 1) {
+                ctx.fillRect(x * CELL_SIZE + 1, y * CELL_SIZE + 1, 
+                           CELL_SIZE - 2, CELL_SIZE - 2);
             }
         }
     }
     
     // Draw pellets
     ctx.fillStyle = '#ffd700';
-    pellets.forEach(pellet => {
+    pellets.forEach(p => {
         ctx.beginPath();
-        ctx.arc(
-            gridToUI(pellet.cellX + 0.5),
-            gridToUI(pellet.cellY + 0.5),
-            3,
-            0,
-            Math.PI * 2
-        );
+        ctx.arc(p.x * CELL_SIZE + CELL_SIZE/2, 
+               p.y * CELL_SIZE + CELL_SIZE/2, 3, 0, Math.PI * 2);
         ctx.fill();
     });
     
-    // Draw Pacman using linear transformation
-    const pacmanUIX = gridToUI(pacman.floatX);
-    const pacmanUIY = gridToUI(pacman.floatY);
+    // Draw Pacman
+    const px = pacman.x * CELL_SIZE + CELL_SIZE/2;
+    const py = pacman.y * CELL_SIZE + CELL_SIZE/2;
+    
+    ctx.save();
+    ctx.translate(px, py);
+    
+    // Rotation
+    let rot = 0;
+    if (pacman.dir) {
+        if (pacman.dir.dx > 0) rot = 0;
+        else if (pacman.dir.dx < 0) rot = Math.PI;
+        else if (pacman.dir.dy > 0) rot = Math.PI/2;
+        else if (pacman.dir.dy < 0) rot = -Math.PI/2;
+    }
+    ctx.rotate(rot);
+    
+    // Mouth animation
+    const mouth = Math.abs(Math.sin(frame * 0.15)) * 0.3 + 0.1;
     
     ctx.fillStyle = '#ffd700';
-    ctx.save();
-    ctx.translate(pacmanUIX, pacmanUIY);
-    
-    // Animate mouth
-    let mouthAngle = 0.2;
-    if (pacman.moving) {
-        mouthAngle = Math.abs(Math.sin(animationFrame * 0.2)) * 0.3 + 0.1;
-    }
-    
-    // Rotate based on direction
-    let rotation = 0;
-    if (pacman.direction) {
-        if (pacman.direction.x > 0) rotation = 0;
-        else if (pacman.direction.x < 0) rotation = Math.PI;
-        else if (pacman.direction.y > 0) rotation = Math.PI / 2;
-        else if (pacman.direction.y < 0) rotation = -Math.PI / 2;
-    }
-    ctx.rotate(rotation);
-    
     ctx.beginPath();
-    ctx.arc(0, 0, CELL_SIZE / 2 - 2, mouthAngle * Math.PI, -mouthAngle * Math.PI);
+    ctx.arc(0, 0, CELL_SIZE/2 - 2, mouth * Math.PI, -mouth * Math.PI);
     ctx.lineTo(0, 0);
-    ctx.closePath();
     ctx.fill();
     ctx.restore();
     
-    // Draw ghosts using linear transformation
-    ghosts.forEach(ghost => {
-        const ghostUIX = gridToUI(ghost.floatX);
-        const ghostUIY = gridToUI(ghost.floatY);
+    // Draw ghosts
+    ghosts.forEach(g => {
+        const gx = g.x * CELL_SIZE + CELL_SIZE/2;
+        const gy = g.y * CELL_SIZE + CELL_SIZE/2;
         
-        ctx.fillStyle = ghost.color;
         ctx.save();
-        ctx.translate(ghostUIX, ghostUIY);
+        ctx.translate(gx, gy);
+        ctx.fillStyle = g.color;
         
-        // Ghost body
+        // Body
         ctx.beginPath();
-        ctx.arc(0, -2, CELL_SIZE / 2 - 2, Math.PI, 0, false);
-        ctx.lineTo(CELL_SIZE / 2 - 2, CELL_SIZE / 2 - 4);
-        
-        // Wavy bottom
+        ctx.arc(0, -2, CELL_SIZE/2 - 2, Math.PI, 0);
+        ctx.lineTo(CELL_SIZE/2 - 2, CELL_SIZE/2 - 4);
         for (let i = 0; i < 3; i++) {
             const x = (i - 1) * 6;
-            ctx.quadraticCurveTo(x - 3, CELL_SIZE / 2 - 2, x, CELL_SIZE / 2 - 4);
+            ctx.quadraticCurveTo(x - 3, CELL_SIZE/2 - 2, x, CELL_SIZE/2 - 4);
         }
-        
-        ctx.lineTo(-CELL_SIZE / 2 + 2, CELL_SIZE / 2 - 4);
-        ctx.closePath();
+        ctx.lineTo(-CELL_SIZE/2 + 2, CELL_SIZE/2 - 4);
         ctx.fill();
         
         // Eyes
@@ -491,10 +346,10 @@ function draw() {
 function gameLoop() {
     if (!gameRunning) return;
     
-    animationFrame++;
+    frame++;
     updatePacman();
     updateGhosts();
-    draw();
+    render();
     
     requestAnimationFrame(gameLoop);
 }
@@ -505,22 +360,15 @@ function startGame() {
     gameLoop();
 }
 
-function gameOver() {
-    gameRunning = false;
-    document.getElementById('final-score').textContent = `SCORE: ${score}`;
-    document.getElementById('game-over').classList.remove('hidden');
-}
-
 function resetGame() {
     score = 0;
     lives = 3;
     document.querySelector('.score').textContent = score;
     document.getElementById('game-over').classList.add('hidden');
     resetLevel();
-    updateLives();
+    updateLivesDisplay();
     gameRunning = true;
     gameLoop();
 }
 
-// Initialize on load
 window.addEventListener('load', init);
