@@ -47,10 +47,9 @@ let pacman = {
     speed: 0.1
 };
 
-// Ghosts with different behaviors
+// Ghosts
 let ghosts = [];
 const GHOST_COLORS = ['#ff0000', '#00ffff', '#ffb8ff', '#ffb851'];
-const GHOST_MODES = ['chase', 'ambush', 'patrol', 'random'];
 
 // Directions
 const DIR = {
@@ -96,13 +95,9 @@ function resetLevel() {
                 ghosts.push({
                     x: x,
                     y: y,
-                    homeX: x,
-                    homeY: y,
                     dir: DIR.UP,
                     color: GHOST_COLORS[ghosts.length],
-                    mode: GHOST_MODES[ghosts.length],
-                    timer: 0,
-                    scatterTimer: 0
+                    timer: 0
                 });
                 grid[y][x] = 0;
             }
@@ -193,122 +188,39 @@ function updatePacman() {
 }
 
 function updateGhosts() {
-    ghosts.forEach((g, index) => {
+    ghosts.forEach(g => {
         g.timer++;
-        g.scatterTimer++;
-        
-        // Switch between chase and scatter mode
-        const inScatterMode = g.scatterTimer < 200;
         
         // Change direction at intersections
         const nearCenter = Math.abs(g.x - Math.round(g.x)) < 0.1 && 
                           Math.abs(g.y - Math.round(g.y)) < 0.1;
         
         if (nearCenter && g.timer > 10) {
-            const gx = Math.round(g.x);
-            const gy = Math.round(g.y);
-            
-            // Get valid directions (no reverse unless stuck)
             const dirs = Object.values(DIR);
             const valid = dirs.filter(d => {
                 // No reverse
                 if (g.dir && d.dx === -g.dir.dx && d.dy === -g.dir.dy) {
                     return false;
                 }
-                return canMove(gx, gy, d);
+                return canMove(Math.round(g.x), Math.round(g.y), d);
             });
             
             if (valid.length > 0) {
-                // Need to change direction?
-                const needChange = !canMove(g.x, g.y, g.dir) || 
-                                 (valid.length > 1 && g.timer > 15);
-                
-                if (needChange) {
-                    // Choose direction based on ghost AI mode
-                    let targetX, targetY;
-                    
-                    if (inScatterMode) {
-                        // Scatter to corners
-                        targetX = g.homeX;
-                        targetY = g.homeY;
-                    } else {
-                        // Different chase behaviors
-                        switch (g.mode) {
-                            case 'chase':
-                                // Red ghost - direct chase
-                                targetX = Math.round(pacman.x);
-                                targetY = Math.round(pacman.y);
-                                break;
-                            
-                            case 'ambush':
-                                // Cyan ghost - aim ahead of Pacman
-                                targetX = Math.round(pacman.x);
-                                targetY = Math.round(pacman.y);
-                                if (pacman.dir) {
-                                    targetX += pacman.dir.dx * 4;
-                                    targetY += pacman.dir.dy * 4;
-                                }
-                                break;
-                            
-                            case 'patrol':
-                                // Pink ghost - patrol area near Pacman
-                                const angle = (frame + index * 100) * 0.05;
-                                targetX = Math.round(pacman.x + Math.cos(angle) * 5);
-                                targetY = Math.round(pacman.y + Math.sin(angle) * 5);
-                                break;
-                            
-                            case 'random':
-                                // Orange ghost - random with occasional chase
-                                if (Math.random() < 0.3) {
-                                    targetX = Math.round(pacman.x);
-                                    targetY = Math.round(pacman.y);
-                                } else {
-                                    targetX = Math.floor(Math.random() * COLS);
-                                    targetY = Math.floor(Math.random() * ROWS);
-                                }
-                                break;
-                        }
-                    }
-                    
-                    // Pick direction that gets closer to target
-                    let bestDir = valid[0];
-                    let bestDist = Infinity;
-                    
-                    valid.forEach(d => {
-                        const nextX = gx + d.dx;
-                        const nextY = gy + d.dy;
-                        const dist = Math.abs(nextX - targetX) + Math.abs(nextY - targetY);
-                        
-                        if (dist < bestDist) {
-                            bestDist = dist;
-                            bestDir = d;
-                        }
-                    });
-                    
-                    g.dir = bestDir;
+                if (Math.random() < 0.3 || !canMove(g.x, g.y, g.dir)) {
+                    g.dir = valid[Math.floor(Math.random() * valid.length)];
                     g.timer = 0;
                 }
-            } else if (!canMove(g.x, g.y, g.dir)) {
-                // Must reverse if stuck
+            } else {
+                // Reverse if stuck
                 g.dir = { dx: -g.dir.dx, dy: -g.dir.dy };
                 g.timer = 0;
             }
         }
         
-        // Move ghost
+        // Move
         if (g.dir && canMove(g.x, g.y, g.dir)) {
-            // Speed varies by mode
-            let speed = 0.05;
-            if (!inScatterMode && g.mode === 'chase') {
-                speed = 0.055; // Red ghost slightly faster when chasing
-            }
-            g.x += g.dir.dx * speed;
-            g.y += g.dir.dy * speed;
-        }
-        
-        // Reset scatter timer periodically
-        if (g.scatterTimer > 400) {
-            g.scatterTimer = 0;
+            g.x += g.dir.dx * 0.05;
+            g.y += g.dir.dy * 0.05;
         }
         
         // Check collision
