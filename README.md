@@ -21,7 +21,7 @@ All 5 maps are manually created using binary format:
 Each map offers a different challenge:
 1. **Classic**: Traditional symmetrical layout
 2. **Tight Corridors**: Narrow passages for challenging navigation
-3. **Spiral Maze**: Unique spiral pattern
+3. **Cross Roads**: Open layout with crossing paths
 4. **Open Arena**: Large open spaces with strategic obstacles
 5. **Diamond Pattern**: Geometric diamond-shaped layout
 

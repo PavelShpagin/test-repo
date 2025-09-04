@@ -48,27 +48,27 @@ const MAPS = [
         [1,0,0,0,0,0,0,1,0,0,0,1,0,0,0,0,0,0,1],
         [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1]
     ],
-    // Map 3: Spiral Maze
+    // Map 3: Cross Roads
     [
         [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
         [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
-        [1,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,1],
+        [1,0,1,1,0,1,0,1,0,0,0,1,0,1,0,1,1,0,1],
         [1,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,1],
-        [1,0,1,0,1,1,1,1,1,1,1,1,1,1,1,0,1,0,1],
-        [1,0,1,0,1,0,0,0,0,0,0,0,0,0,1,0,1,0,1],
-        [1,0,1,0,1,0,1,1,1,1,1,1,1,0,1,0,1,0,1],
-        [1,0,1,0,1,0,1,0,0,0,0,0,1,0,1,0,1,0,1],
-        [1,0,1,0,1,0,1,0,1,3,1,0,1,0,1,0,1,0,1],
-        [1,0,1,0,1,0,0,0,3,3,3,0,0,0,1,0,1,0,1],
-        [1,0,1,0,1,0,1,0,1,1,1,0,1,0,1,0,1,0,1],
-        [1,0,1,0,1,0,1,0,0,0,0,0,1,0,1,0,1,0,1],
-        [1,0,1,0,1,0,1,1,1,0,1,1,1,0,1,0,1,0,1],
-        [1,0,1,0,1,0,0,0,0,0,0,0,0,0,1,0,1,0,1],
-        [1,0,1,0,1,1,1,1,1,1,1,1,1,1,1,0,1,0,1],
-        [1,0,1,0,0,0,0,0,0,2,0,0,0,0,0,0,1,0,1],
-        [1,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,0,1],
+        [1,0,0,0,1,0,0,0,1,0,1,0,0,0,1,0,0,0,1],
+        [1,0,1,0,0,0,1,0,0,0,0,0,1,0,0,0,1,0,1],
         [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
-        [1,1,1,0,1,1,1,1,1,0,1,1,1,1,1,0,1,1,1],
+        [1,0,1,0,1,0,0,1,0,0,0,1,0,0,1,0,1,0,1],
+        [1,0,0,0,0,0,0,0,0,3,0,0,0,0,0,0,0,0,1],
+        [1,0,0,0,0,0,0,0,3,3,3,0,0,0,0,0,0,0,1],
+        [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+        [1,0,1,0,1,0,0,1,0,0,0,1,0,0,1,0,1,0,1],
+        [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+        [1,0,1,0,0,0,1,0,0,0,0,0,1,0,0,0,1,0,1],
+        [1,0,0,0,1,0,0,0,1,0,1,0,0,0,1,0,0,0,1],
+        [1,0,1,0,0,0,0,0,0,2,0,0,0,0,0,0,1,0,1],
+        [1,0,1,1,0,1,0,1,0,0,0,1,0,1,0,1,1,0,1],
+        [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+        [1,0,0,1,1,0,0,1,1,0,1,1,0,0,1,1,0,0,1],
         [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
         [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1]
     ],
@@ -294,8 +294,8 @@ function resetLevel() {
                     hasLeftBase: false,
                     strategy: strategy,
                     territory: null,
-                    trackingTurn: 0,
-                    lastDecisionPoint: null
+                    previousPositions: [], // Track last few positions for new tracking strategy
+                    lastPosition: null
                 };
                 
                 // Assign territory for territorial ghosts
@@ -421,92 +421,6 @@ function findShortestPath(startX, startY, targetX, targetY) {
     return null;
 }
 
-// Find paths with strategic divergence points for each ghost
-function findStrategicPaths(startX, startY, targetX, targetY, ghostIndex) {
-    // First, find the absolute shortest path from current position
-    const shortestPath = findShortestPath(startX, startY, targetX, targetY);
-    
-    if (!shortestPath || shortestPath.length === 0) {
-        return null;
-    }
-    
-    // Ghost 0: Always take the direct shortest path
-    if (ghostIndex === 0) {
-        return shortestPath[0];
-    }
-    
-    // For other ghosts, find alternative paths that diverge at specific steps:
-    // Ghost 1: Take different FIRST move, then shortest from there
-    // Ghost 2: Follow shortest for 1 move, then different SECOND move, then shortest
-    // Ghost 3: Follow shortest for 2 moves, then different THIRD move, then shortest
-    
-    // Build the full alternative path
-    const alternativePath = [];
-    const divergeAtStep = ghostIndex; // Ghost 1 diverges at step 1, Ghost 2 at step 2, etc.
-    
-    // Follow the shortest path up to (but not including) the divergence point
-    let currentX = startX;
-    let currentY = startY;
-    
-    for (let step = 0; step < divergeAtStep - 1 && step < shortestPath.length; step++) {
-        alternativePath.push(shortestPath[step]);
-        currentX += shortestPath[step].dx;
-        currentY += shortestPath[step].dy;
-    }
-    
-    // Now we're at the position where we need to diverge
-    // Find all valid directions that are NOT the shortest path direction
-    const shortestNextMove = shortestPath[divergeAtStep - 1];
-    let bestAlternative = null;
-    let bestTotalLength = Infinity;
-    
-    if (shortestNextMove) {
-        for (let dir of Object.values(DIR)) {
-            const nx = currentX + dir.dx;
-            const ny = currentY + dir.dy;
-            
-            // Skip the shortest path direction at this divergence point
-            if (dir.dx === shortestNextMove.dx && dir.dy === shortestNextMove.dy) {
-                continue;
-            }
-            
-            // Check if this direction is valid
-            if (nx >= 0 && nx < COLS && ny >= 0 && ny < ROWS && grid[ny][nx] !== 1) {
-                // Find shortest path from this alternative position to target
-                const pathFromAlt = findShortestPath(nx, ny, targetX, targetY);
-                
-                if (pathFromAlt) {
-                    const totalLength = alternativePath.length + 1 + pathFromAlt.length;
-                    
-                    if (totalLength < bestTotalLength) {
-                        bestTotalLength = totalLength;
-                        bestAlternative = [...alternativePath, dir, ...pathFromAlt];
-                    }
-                }
-            }
-        }
-    }
-    
-    // Return the first move of the best alternative path, or shortest if no alternative
-    if (bestAlternative && bestAlternative.length > 0) {
-        return bestAlternative[0];
-    }
-    
-    // Fallback: if can't diverge at specified point, try to take any different first move
-    for (let dir of Object.values(DIR)) {
-        const nx = startX + dir.dx;
-        const ny = startY + dir.dy;
-        
-        if (nx >= 0 && nx < COLS && ny >= 0 && ny < ROWS && grid[ny][nx] !== 1) {
-            if (dir.dx !== shortestPath[0].dx || dir.dy !== shortestPath[0].dy) {
-                return dir;
-            }
-        }
-    }
-    
-    return shortestPath[0];
-}
-
 // Assign territory quadrants to territorial ghosts
 function assignTerritory(ghostIndex) {
     // Count how many territorial ghosts already exist
@@ -593,7 +507,7 @@ function getTerritorialDirection(ghost, pacX, pacY) {
     }
 }
 
-// Tracking AI with extension for multiple trackers
+// New Tracking AI with probability-based movement
 function getTrackingDirection(ghost, ghostIndex, pacX, pacY) {
     const gx = Math.round(ghost.x);
     const gy = Math.round(ghost.y);
@@ -606,33 +520,61 @@ function getTrackingDirection(ghost, ghostIndex, pacX, pacY) {
         }
     }
     
-    // Check if we're at a decision point (intersection)
-    const isDecisionPoint = countValidDirections(gx, gy) > 2;
-    
-    if (isDecisionPoint) {
-        if (!ghost.lastDecisionPoint || ghost.lastDecisionPoint.x !== gx || ghost.lastDecisionPoint.y !== gy) {
-            ghost.lastDecisionPoint = { x: gx, y: gy };
-            ghost.trackingTurn++;
-        }
-    }
-    
+    // Get shortest path using Dijkstra/BFS
     const path = findShortestPath(gx, gy, pacX, pacY);
     
     if (!path || path.length === 0) {
+        // No path found - shouldn't happen in connected maps
         return getRandomDirection(ghost);
     }
     
+    // First tracking ghost: always follow shortest path (100% probability)
     if (trackingIndex === 0) {
-        // First tracker: always take shortest path
+        return path[0];
+    }
+    
+    // For other tracking ghosts: use probability-based movement
+    // Probability of taking shortest path: 100% - (10% * trackingIndex)
+    // So: 2nd ghost = 90%, 3rd = 80%, 4th = 70%
+    const shortestPathProbability = Math.max(0.5, 1.0 - (0.1 * trackingIndex));
+    
+    // Find valid neighboring cells that weren't visited in the last move
+    const validAlternatives = [];
+    
+    for (let dir of Object.values(DIR)) {
+        const nx = gx + dir.dx;
+        const ny = gy + dir.dy;
+        
+        // Check if valid cell
+        if (nx >= 0 && nx < COLS && ny >= 0 && ny < ROWS && grid[ny][nx] !== 1) {
+            // Check if this wasn't our last position
+            if (!ghost.lastPosition || ghost.lastPosition.x !== nx || ghost.lastPosition.y !== ny) {
+                // Don't include the shortest path direction in alternatives
+                if (dir.dx !== path[0].dx || dir.dy !== path[0].dy) {
+                    validAlternatives.push(dir);
+                }
+            }
+        }
+    }
+    
+    // Make probabilistic decision
+    const rand = Math.random();
+    
+    if (rand < shortestPathProbability || validAlternatives.length === 0) {
+        // Take shortest path
         return path[0];
     } else {
-        // Other trackers: diverge at specific turns
-        if (ghost.trackingTurn >= trackingIndex && path.length > trackingIndex) {
-            // Try to take an alternative at the nth turn
-            const alternativePath = findAlternativePathWithDivergence(gx, gy, pacX, pacY, path, trackingIndex);
-            return alternativePath || path[0];
+        // Take an alternative path
+        if (validAlternatives.length === 1) {
+            return validAlternatives[0];
+        } else if (validAlternatives.length > 1) {
+            // Choose randomly among alternatives with equal probability
+            const randomIndex = Math.floor(Math.random() * validAlternatives.length);
+            return validAlternatives[randomIndex];
+        } else {
+            // Fallback to shortest path if no alternatives
+            return path[0];
         }
-        return path[0];
     }
 }
 
@@ -664,6 +606,9 @@ function updateGhosts() {
         if (nearCenter && g.timer > 10) {
             const gx = Math.round(g.x);
             const gy = Math.round(g.y);
+            
+            // Update last position for tracking strategy
+            g.lastPosition = { x: gx, y: gy };
             
             // Check if ghost just left the base (around row 10, moving up)
             if (!g.hasLeftBase && gy <= 10 && gy >= 8) {
