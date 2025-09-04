@@ -252,6 +252,9 @@ function init() {
     // Initialize score display
     document.querySelector('.score').textContent = score;
     
+    // Initialize difficulty display
+    updateDifficulty(currentDifficulty);
+    
     setupControls();
     resetLevel();
     updateLivesDisplay();
@@ -553,7 +556,8 @@ function getTerritorialDirection(ghost, pacX, pacY) {
     
     if (pacmanInTerritory) {
         // Use DFS/BFS to find shortest path to Pacman
-        return findShortestPath(gx, gy, pacX, pacY)[0] || getRandomDirection(ghost);
+        const path = findShortestPath(gx, gy, pacX, pacY);
+        return (path && path.length > 0) ? path[0] : getRandomDirection(ghost);
     } else {
         // Stay in territory - move towards center if outside
         const centerX = Math.floor((territory.minX + territory.maxX) / 2);
@@ -564,7 +568,8 @@ function getTerritorialDirection(ghost, pacX, pacY) {
         
         if (!ghostInTerritory) {
             // Move back to territory
-            return findShortestPath(gx, gy, centerX, centerY)[0] || getRandomDirection(ghost);
+            const path = findShortestPath(gx, gy, centerX, centerY);
+            return (path && path.length > 0) ? path[0] : getRandomDirection(ghost);
         } else {
             // Random movement within territory
             const validDirs = [];
@@ -613,17 +618,21 @@ function getTrackingDirection(ghost, ghostIndex, pacX, pacY) {
     
     const path = findShortestPath(gx, gy, pacX, pacY);
     
+    if (!path || path.length === 0) {
+        return getRandomDirection(ghost);
+    }
+    
     if (trackingIndex === 0) {
         // First tracker: always take shortest path
-        return path[0] || getRandomDirection(ghost);
+        return path[0];
     } else {
         // Other trackers: diverge at specific turns
         if (ghost.trackingTurn >= trackingIndex && path.length > trackingIndex) {
             // Try to take an alternative at the nth turn
             const alternativePath = findAlternativePathWithDivergence(gx, gy, pacX, pacY, path, trackingIndex);
-            return alternativePath || path[0] || getRandomDirection(ghost);
+            return alternativePath || path[0];
         }
-        return path[0] || getRandomDirection(ghost);
+        return path[0];
     }
 }
 
@@ -991,23 +1000,11 @@ function updateDifficulty(value) {
         difficultyValue.textContent = difficultyNames[currentDifficulty];
     }
     
-    // If game is running, update ghost strategies
-    if (gameRunning && ghosts.length > 0) {
-        const strategies = DIFFICULTY_CONFIGS[currentDifficulty];
-        let territorialCount = 0;
-        
-        ghosts.forEach((ghost, index) => {
-            ghost.strategy = strategies[index];
-            ghost.trackingTurn = 0;
-            ghost.lastDecisionPoint = null;
-            
-            // Reassign territories for territorial ghosts
-            if (ghost.strategy === GHOST_STRATEGY.TERRITORIAL) {
-                ghost.territory = assignTerritoryByIndex(territorialCount++);
-            } else {
-                ghost.territory = null;
-            }
-        });
+    // Reload the level when difficulty changes
+    if (gameRunning) {
+        // Keep the current map but reset the level
+        resetLevel();
+        // Don't need to call gameLoop as it's already running
     }
 }
 
