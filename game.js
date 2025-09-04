@@ -539,6 +539,14 @@ function gameLoop() {
 
 function startGame() {
     document.getElementById('start-screen').classList.add('hidden');
+    
+    // Initialize game state
+    score = 0;
+    lives = 3;
+    document.querySelector('.score').textContent = score;
+    resetLevel();
+    updateLivesDisplay();
+    
     gameRunning = true;
     gameLoop();
 }
