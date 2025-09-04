@@ -65,6 +65,9 @@ function init() {
     canvas.width = COLS * CELL_SIZE;
     canvas.height = ROWS * CELL_SIZE;
     
+    // Initialize score display
+    document.querySelector('.score').textContent = score;
+    
     setupControls();
     resetLevel();
     updateLivesDisplay();
@@ -438,12 +441,14 @@ function updateLivesDisplay() {
 }
 
 function render() {
+    if (!ctx) return;
+    
     // Clear
     ctx.fillStyle = '#000';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     
     // Draw maze
-    ctx.fillStyle = '#222';
+    ctx.fillStyle = '#0044ff';  // Bright blue for walls
     for (let y = 0; y < ROWS; y++) {
         for (let x = 0; x < COLS; x++) {
             if (grid[y][x] === 1) {
