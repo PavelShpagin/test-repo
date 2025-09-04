@@ -135,6 +135,7 @@ let score = 0;
 let lives = 3;
 let gameRunning = false;
 let frame = 0;
+let animationId = null;
 
 // Binary grid
 let grid = [];
@@ -577,6 +578,11 @@ function loseLife() {
     
     if (lives <= 0) {
         gameRunning = false;
+        // Cancel animation frame when game is over
+        if (animationId) {
+            cancelAnimationFrame(animationId);
+            animationId = null;
+        }
         document.getElementById('final-score').textContent = score;
         document.getElementById('game-over').classList.remove('hidden');
     } else {
@@ -686,18 +692,30 @@ function render() {
 }
 
 function gameLoop() {
-    if (!gameRunning) return;
+    if (!gameRunning) {
+        if (animationId) {
+            cancelAnimationFrame(animationId);
+            animationId = null;
+        }
+        return;
+    }
     
     frame++;
     updatePacman();
     updateGhosts();
     render();
     
-    requestAnimationFrame(gameLoop);
+    animationId = requestAnimationFrame(gameLoop);
 }
 
 function startGame() {
     document.getElementById('start-screen').classList.add('hidden');
+    
+    // Cancel any existing animation frame
+    if (animationId) {
+        cancelAnimationFrame(animationId);
+        animationId = null;
+    }
     
     // Select a random map for the new game
     selectRandomMap();
@@ -714,6 +732,12 @@ function startGame() {
 }
 
 function resetGame() {
+    // Cancel any existing animation frame
+    if (animationId) {
+        cancelAnimationFrame(animationId);
+        animationId = null;
+    }
+    
     // Select a new random map when restarting after game over
     selectRandomMap();
     
@@ -730,6 +754,12 @@ function resetGame() {
 function reloadMap() {
     // Stop current game
     gameRunning = false;
+    
+    // Cancel any existing animation frame
+    if (animationId) {
+        cancelAnimationFrame(animationId);
+        animationId = null;
+    }
     
     // Select a new random map
     selectRandomMap();
