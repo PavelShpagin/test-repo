@@ -294,7 +294,7 @@ function resetLevel() {
                     hasLeftBase: false,
                     strategy: strategy,
                     territory: null,
-                    previousPositions: [], // Track last few positions for new tracking strategy
+                    visitedCells: new Set(), // Track all visited cells for random strategy
                     lastPosition: null
                 };
                 
@@ -434,26 +434,61 @@ function assignTerritory(ghostIndex) {
     return assignTerritoryByIndex(territorialCount);
 }
 
-// Random AI: Choose random valid direction
+// Random AI: Choose random unvisited cell, backtrack if trapped
 function getRandomDirection(ghost) {
     const gx = Math.round(ghost.x);
     const gy = Math.round(ghost.y);
-    const validDirs = [];
+    
+    // Add current position to visited cells
+    const posKey = `${gx},${gy}`;
+    ghost.visitedCells.add(posKey);
+    
+    // Find unvisited valid directions
+    const unvisitedDirs = [];
+    const allValidDirs = [];
     
     for (let dir of Object.values(DIR)) {
         const nx = gx + dir.dx;
         const ny = gy + dir.dy;
         
         if (nx >= 0 && nx < COLS && ny >= 0 && ny < ROWS && grid[ny][nx] !== 1) {
-            // Avoid reversing direction
-            if (ghost.dir && (dir.dx === -ghost.dir.dx && dir.dy === -ghost.dir.dy)) {
-                continue;
+            const nextPosKey = `${nx},${ny}`;
+            allValidDirs.push(dir);
+            
+            // Check if this cell hasn't been visited
+            if (!ghost.visitedCells.has(nextPosKey)) {
+                unvisitedDirs.push(dir);
             }
-            validDirs.push(dir);
         }
     }
     
-    return validDirs.length > 0 ? validDirs[Math.floor(Math.random() * validDirs.length)] : ghost.dir;
+    // Prefer unvisited cells
+    if (unvisitedDirs.length > 0) {
+        // Choose randomly among unvisited cells with equal probability
+        return unvisitedDirs[Math.floor(Math.random() * unvisitedDirs.length)];
+    }
+    
+    // If all neighboring cells are visited, we're trapped - backtrack
+    if (allValidDirs.length > 0) {
+        // Move back to previous position if possible (allow reversing)
+        if (ghost.lastPosition) {
+            const backDir = {
+                dx: ghost.lastPosition.x - gx,
+                dy: ghost.lastPosition.y - gy
+            };
+            // Verify this is a valid direction
+            for (let dir of Object.values(DIR)) {
+                if (dir.dx === backDir.dx && dir.dy === backDir.dy) {
+                    return dir;
+                }
+            }
+        }
+        // If can't backtrack, choose any valid direction
+        return allValidDirs[Math.floor(Math.random() * allValidDirs.length)];
+    }
+    
+    // No valid moves at all (shouldn't happen)
+    return ghost.dir || DIR.UP;
 }
 
 // Territorial AI: Guard a quadrant, chase if Pacman enters
@@ -485,8 +520,14 @@ function getTerritorialDirection(ghost, pacX, pacY) {
             const path = findShortestPath(gx, gy, centerX, centerY);
             return (path && path.length > 0) ? path[0] : getRandomDirection(ghost);
         } else {
-            // Random movement within territory
-            const validDirs = [];
+            // Random movement within territory (use same unvisited logic)
+            const posKey = `${gx},${gy}`;
+            if (!ghost.visitedCells) ghost.visitedCells = new Set();
+            ghost.visitedCells.add(posKey);
+            
+            const unvisitedDirs = [];
+            const allValidDirs = [];
+            
             for (let dir of Object.values(DIR)) {
                 const nx = gx + dir.dx;
                 const ny = gy + dir.dy;
@@ -494,15 +535,37 @@ function getTerritorialDirection(ghost, pacX, pacY) {
                 if (nx >= territory.minX && nx < territory.maxX &&
                     ny >= territory.minY && ny < territory.maxY &&
                     grid[ny][nx] !== 1) {
-                    // Avoid reversing
-                    if (ghost.dir && (dir.dx === -ghost.dir.dx && dir.dy === -ghost.dir.dy)) {
-                        continue;
+                    const nextPosKey = `${nx},${ny}`;
+                    allValidDirs.push(dir);
+                    
+                    if (!ghost.visitedCells.has(nextPosKey)) {
+                        unvisitedDirs.push(dir);
                     }
-                    validDirs.push(dir);
                 }
             }
             
-            return validDirs.length > 0 ? validDirs[Math.floor(Math.random() * validDirs.length)] : getRandomDirection(ghost);
+            // Prefer unvisited cells
+            if (unvisitedDirs.length > 0) {
+                return unvisitedDirs[Math.floor(Math.random() * unvisitedDirs.length)];
+            }
+            
+            // Backtrack if trapped
+            if (allValidDirs.length > 0) {
+                if (ghost.lastPosition) {
+                    const backDir = {
+                        dx: ghost.lastPosition.x - gx,
+                        dy: ghost.lastPosition.y - gy
+                    };
+                    for (let dir of Object.values(DIR)) {
+                        if (dir.dx === backDir.dx && dir.dy === backDir.dy) {
+                            return dir;
+                        }
+                    }
+                }
+                return allValidDirs[Math.floor(Math.random() * allValidDirs.length)];
+            }
+            
+            return getRandomDirection(ghost);
         }
     }
 }
@@ -572,7 +635,19 @@ function getTrackingDirection(ghost, ghostIndex, pacX, pacY) {
             const randomIndex = Math.floor(Math.random() * validAlternatives.length);
             return validAlternatives[randomIndex];
         } else {
-            // Fallback to shortest path if no alternatives
+            // No alternatives and can't take shortest - backtrack
+            if (ghost.lastPosition) {
+                const backDir = {
+                    dx: ghost.lastPosition.x - gx,
+                    dy: ghost.lastPosition.y - gy
+                };
+                for (let dir of Object.values(DIR)) {
+                    if (dir.dx === backDir.dx && dir.dy === backDir.dy) {
+                        return dir;
+                    }
+                }
+            }
+            // Last resort: take shortest path
             return path[0];
         }
     }
@@ -599,6 +674,11 @@ function updateGhosts() {
     ghosts.forEach((g, index) => {
         g.timer++;
         
+        // Clear visited cells periodically to prevent permanent loops (every 200 moves)
+        if (g.visitedCells && g.visitedCells.size > 200) {
+            g.visitedCells.clear();
+        }
+        
         // Only update direction at grid centers
         const nearCenter = Math.abs(g.x - Math.round(g.x)) < 0.1 && 
                           Math.abs(g.y - Math.round(g.y)) < 0.1;
@@ -607,7 +687,7 @@ function updateGhosts() {
             const gx = Math.round(g.x);
             const gy = Math.round(g.y);
             
-            // Update last position for tracking strategy
+            // Update last position for all strategies
             g.lastPosition = { x: gx, y: gy };
             
             // Check if ghost just left the base (around row 10, moving up)
