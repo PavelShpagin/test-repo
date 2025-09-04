@@ -47,6 +47,58 @@ body {
     flex: 1;
 }
 
+.difficulty-bar {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    padding: 10px 16px;
+    background: #1a1a1a;
+    border-radius: 12px;
+    margin-bottom: 16px;
+    font-size: 16px;
+}
+
+.difficulty-bar label {
+    color: #ffd700;
+    font-weight: 600;
+}
+
+.difficulty-bar input[type="range"] {
+    flex: 1;
+    height: 6px;
+    background: #333;
+    border-radius: 3px;
+    outline: none;
+    -webkit-appearance: none;
+}
+
+.difficulty-bar input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 20px;
+    height: 20px;
+    background: #ffd700;
+    border-radius: 50%;
+    cursor: pointer;
+    box-shadow: 0 0 8px rgba(255, 215, 0, 0.4);
+}
+
+.difficulty-bar input[type="range"]::-moz-range-thumb {
+    width: 20px;
+    height: 20px;
+    background: #ffd700;
+    border-radius: 50%;
+    cursor: pointer;
+    box-shadow: 0 0 8px rgba(255, 215, 0, 0.4);
+}
+
+#difficulty-value {
+    color: #fff;
+    min-width: 80px;
+    text-align: right;
+    font-weight: 600;
+}
+
 .reload-btn {
     background: #2a2a2a;
     border: 2px solid #444;
@@ -104,7 +156,18 @@ body {
     box-shadow: 0 0 8px rgba(255, 215, 0, 0.3);
 }
 
-/* Removed black triangles from lives */
+.life::after {
+    content: '';
+    position: absolute;
+    right: 3px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 0;
+    height: 0;
+    border-style: solid;
+    border-width: 8px 0 8px 10px;
+    border-color: transparent transparent transparent #0a0a0a;
+}
 
 #game {
     width: 100%;

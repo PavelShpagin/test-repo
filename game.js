@@ -154,6 +154,24 @@ let pacman = {
 let ghosts = [];
 const GHOST_COLORS = ['#ff0000', '#00ffff', '#ffb8ff', '#ffb851'];
 
+// Ghost AI Strategies
+const GHOST_STRATEGY = {
+    RANDOM: 'random',
+    TERRITORIAL: 'territorial',
+    TRACKING: 'tracking'
+};
+
+// Difficulty Settings
+let currentDifficulty = 1;
+const DIFFICULTY_CONFIGS = {
+    1: [GHOST_STRATEGY.RANDOM, GHOST_STRATEGY.RANDOM, GHOST_STRATEGY.RANDOM, GHOST_STRATEGY.TRACKING],
+    2: [GHOST_STRATEGY.RANDOM, GHOST_STRATEGY.RANDOM, GHOST_STRATEGY.TERRITORIAL, GHOST_STRATEGY.TRACKING],
+    3: [GHOST_STRATEGY.RANDOM, GHOST_STRATEGY.TERRITORIAL, GHOST_STRATEGY.TERRITORIAL, GHOST_STRATEGY.TRACKING],
+    4: [GHOST_STRATEGY.TERRITORIAL, GHOST_STRATEGY.TERRITORIAL, GHOST_STRATEGY.TRACKING, GHOST_STRATEGY.TRACKING],
+    5: [GHOST_STRATEGY.TERRITORIAL, GHOST_STRATEGY.TRACKING, GHOST_STRATEGY.TRACKING, GHOST_STRATEGY.TRACKING],
+    6: [GHOST_STRATEGY.TRACKING, GHOST_STRATEGY.TRACKING, GHOST_STRATEGY.TRACKING, GHOST_STRATEGY.TRACKING]
+};
+
 // Directions
 const DIR = {
     UP: { dx: 0, dy: -1 },
@@ -261,14 +279,28 @@ function resetLevel() {
                 grid[y][x] = 0;
                 pellets.push({ x, y });
             } else if (cell === 3) {
-                ghosts.push({
+                const ghostIndex = ghosts.length;
+                const strategy = DIFFICULTY_CONFIGS[currentDifficulty][ghostIndex];
+                
+                const ghost = {
                     x: x,
                     y: y,
                     dir: DIR.UP,
-                    color: GHOST_COLORS[ghosts.length],
+                    color: GHOST_COLORS[ghostIndex],
                     timer: 0,
-                    hasLeftBase: false
-                });
+                    hasLeftBase: false,
+                    strategy: strategy,
+                    territory: null,
+                    trackingTurn: 0,
+                    lastDecisionPoint: null
+                };
+                
+                // Assign territory for territorial ghosts
+                if (strategy === GHOST_STRATEGY.TERRITORIAL) {
+                    ghost.territory = assignTerritory(ghostIndex);
+                }
+                
+                ghosts.push(ghost);
                 grid[y][x] = 0;
             }
         }
@@ -472,6 +504,142 @@ function findStrategicPaths(startX, startY, targetX, targetY, ghostIndex) {
     return shortestPath[0];
 }
 
+// Assign territory quadrants to territorial ghosts
+function assignTerritory(ghostIndex) {
+    // Count how many territorial ghosts already exist
+    let territorialCount = 0;
+    for (let i = 0; i < ghostIndex; i++) {
+        if (DIFFICULTY_CONFIGS[currentDifficulty][i] === GHOST_STRATEGY.TERRITORIAL) {
+            territorialCount++;
+        }
+    }
+    
+    return assignTerritoryByIndex(territorialCount);
+}
+
+// Random AI: Choose random valid direction
+function getRandomDirection(ghost) {
+    const gx = Math.round(ghost.x);
+    const gy = Math.round(ghost.y);
+    const validDirs = [];
+    
+    for (let dir of Object.values(DIR)) {
+        const nx = gx + dir.dx;
+        const ny = gy + dir.dy;
+        
+        if (nx >= 0 && nx < COLS && ny >= 0 && ny < ROWS && grid[ny][nx] !== 1) {
+            // Avoid reversing direction
+            if (ghost.dir && (dir.dx === -ghost.dir.dx && dir.dy === -ghost.dir.dy)) {
+                continue;
+            }
+            validDirs.push(dir);
+        }
+    }
+    
+    return validDirs.length > 0 ? validDirs[Math.floor(Math.random() * validDirs.length)] : ghost.dir;
+}
+
+// Territorial AI: Guard a quadrant, chase if Pacman enters
+function getTerritorialDirection(ghost, pacX, pacY) {
+    const gx = Math.round(ghost.x);
+    const gy = Math.round(ghost.y);
+    const territory = ghost.territory;
+    
+    if (!territory) return getRandomDirection(ghost);
+    
+    // Check if Pacman is in our territory
+    const pacmanInTerritory = pacX >= territory.minX && pacX < territory.maxX &&
+                             pacY >= territory.minY && pacY < territory.maxY;
+    
+    if (pacmanInTerritory) {
+        // Use DFS/BFS to find shortest path to Pacman
+        return findShortestPath(gx, gy, pacX, pacY)[0] || getRandomDirection(ghost);
+    } else {
+        // Stay in territory - move towards center if outside
+        const centerX = Math.floor((territory.minX + territory.maxX) / 2);
+        const centerY = Math.floor((territory.minY + territory.maxY) / 2);
+        
+        const ghostInTerritory = gx >= territory.minX && gx < territory.maxX &&
+                                gy >= territory.minY && gy < territory.maxY;
+        
+        if (!ghostInTerritory) {
+            // Move back to territory
+            return findShortestPath(gx, gy, centerX, centerY)[0] || getRandomDirection(ghost);
+        } else {
+            // Random movement within territory
+            const validDirs = [];
+            for (let dir of Object.values(DIR)) {
+                const nx = gx + dir.dx;
+                const ny = gy + dir.dy;
+                
+                if (nx >= territory.minX && nx < territory.maxX &&
+                    ny >= territory.minY && ny < territory.maxY &&
+                    grid[ny][nx] !== 1) {
+                    // Avoid reversing
+                    if (ghost.dir && (dir.dx === -ghost.dir.dx && dir.dy === -ghost.dir.dy)) {
+                        continue;
+                    }
+                    validDirs.push(dir);
+                }
+            }
+            
+            return validDirs.length > 0 ? validDirs[Math.floor(Math.random() * validDirs.length)] : getRandomDirection(ghost);
+        }
+    }
+}
+
+// Tracking AI with extension for multiple trackers
+function getTrackingDirection(ghost, ghostIndex, pacX, pacY) {
+    const gx = Math.round(ghost.x);
+    const gy = Math.round(ghost.y);
+    
+    // Count how many tracking ghosts come before this one
+    let trackingIndex = 0;
+    for (let i = 0; i < ghostIndex; i++) {
+        if (ghosts[i].strategy === GHOST_STRATEGY.TRACKING) {
+            trackingIndex++;
+        }
+    }
+    
+    // Check if we're at a decision point (intersection)
+    const isDecisionPoint = countValidDirections(gx, gy) > 2;
+    
+    if (isDecisionPoint) {
+        if (!ghost.lastDecisionPoint || ghost.lastDecisionPoint.x !== gx || ghost.lastDecisionPoint.y !== gy) {
+            ghost.lastDecisionPoint = { x: gx, y: gy };
+            ghost.trackingTurn++;
+        }
+    }
+    
+    const path = findShortestPath(gx, gy, pacX, pacY);
+    
+    if (trackingIndex === 0) {
+        // First tracker: always take shortest path
+        return path[0] || getRandomDirection(ghost);
+    } else {
+        // Other trackers: diverge at specific turns
+        if (ghost.trackingTurn >= trackingIndex && path.length > trackingIndex) {
+            // Try to take an alternative at the nth turn
+            const alternativePath = findAlternativePathWithDivergence(gx, gy, pacX, pacY, path, trackingIndex);
+            return alternativePath || path[0] || getRandomDirection(ghost);
+        }
+        return path[0] || getRandomDirection(ghost);
+    }
+}
+
+// Count valid directions from a position
+function countValidDirections(x, y) {
+    let count = 0;
+    for (let dir of Object.values(DIR)) {
+        const nx = x + dir.dx;
+        const ny = y + dir.dy;
+        if (nx >= 0 && nx < COLS && ny >= 0 && ny < ROWS && grid[ny][nx] !== 1) {
+            count++;
+        }
+    }
+    return count;
+}
+
 function updateGhosts() {
     // Get Pacman's grid position
     const pacX = Math.round(pacman.x);
@@ -510,8 +678,22 @@ function updateGhosts() {
             if ((index === 1 || index === 3) && g.timer === 0) {
                 // Just set the initial direction, skip pathfinding this frame
             } else {
-                // Find strategic path for this ghost
-                const nextMove = findStrategicPaths(gx, gy, pacX, pacY, index);
+                // Choose direction based on ghost's strategy
+                let nextMove = null;
+                
+                switch (g.strategy) {
+                    case GHOST_STRATEGY.RANDOM:
+                        nextMove = getRandomDirection(g);
+                        break;
+                    case GHOST_STRATEGY.TERRITORIAL:
+                        nextMove = getTerritorialDirection(g, pacX, pacY);
+                        break;
+                    case GHOST_STRATEGY.TRACKING:
+                        nextMove = getTrackingDirection(g, index, pacX, pacY);
+                        break;
+                    default:
+                        nextMove = getRandomDirection(g);
+                }
                 
                 if (nextMove) {
                     // Check if it's not a reverse (unless no choice)
@@ -789,6 +971,59 @@ function reloadMap() {
     updateLivesDisplay();
     gameRunning = true;
     gameLoop();
+}
+
+// Update difficulty setting
+function updateDifficulty(value) {
+    currentDifficulty = parseInt(value);
+    
+    const difficultyNames = {
+        1: 'Easy',
+        2: 'Normal',
+        3: 'Medium',
+        4: 'Hard',
+        5: 'Expert',
+        6: 'Insane'
+    };
+    
+    const difficultyValue = document.getElementById('difficulty-value');
+    if (difficultyValue) {
+        difficultyValue.textContent = difficultyNames[currentDifficulty];
+    }
+    
+    // If game is running, update ghost strategies
+    if (gameRunning && ghosts.length > 0) {
+        const strategies = DIFFICULTY_CONFIGS[currentDifficulty];
+        let territorialCount = 0;
+        
+        ghosts.forEach((ghost, index) => {
+            ghost.strategy = strategies[index];
+            ghost.trackingTurn = 0;
+            ghost.lastDecisionPoint = null;
+            
+            // Reassign territories for territorial ghosts
+            if (ghost.strategy === GHOST_STRATEGY.TERRITORIAL) {
+                ghost.territory = assignTerritoryByIndex(territorialCount++);
+            } else {
+                ghost.territory = null;
+            }
+        });
+    }
+}
+
+// Assign specific territory by index
+function assignTerritoryByIndex(index) {
+    const midX = Math.floor(COLS / 2);
+    const midY = Math.floor(ROWS / 2);
+    
+    const territories = [
+        { minX: 0, maxX: midX, minY: 0, maxY: midY },        // Top-left
+        { minX: midX, maxX: COLS, minY: 0, maxY: midY },     // Top-right
+        { minX: 0, maxX: midX, minY: midY, maxY: ROWS },     // Bottom-left
+        { minX: midX, maxX: COLS, minY: midY, maxY: ROWS }   // Bottom-right
+    ];
+    
+    return territories[index % 4];
 }
 
 window.addEventListener('load', init);

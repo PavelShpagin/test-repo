@@ -23,6 +23,12 @@
             <div class="lives"></div>
         </div>
         
+        <div class="difficulty-bar">
+            <label for="difficulty">Difficulty:</label>
+            <input type="range" id="difficulty" min="1" max="6" value="1" onchange="updateDifficulty(this.value)">
+            <span id="difficulty-value">Easy</span>
+        </div>
+        
         <canvas id="game"></canvas>
         
         <div class="controls">
