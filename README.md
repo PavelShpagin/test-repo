@@ -22,7 +22,7 @@ Each map offers a different challenge:
 1. **Classic**: Traditional symmetrical layout
 2. **Tight Corridors**: Narrow passages for challenging navigation
 3. **Spiral Maze**: Unique spiral pattern
-4. **Very Open**: Large open spaces with strategic obstacles
+4. **Open Arena**: Large open spaces with strategic obstacles
 5. **Diamond Pattern**: Geometric diamond-shaped layout
 
 ## Controls
