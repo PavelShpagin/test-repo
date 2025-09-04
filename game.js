@@ -187,18 +187,27 @@ function updatePacman() {
     }
 }
 
-// BFS to find paths from ghosts to Pacman
-function findPathBFS(startX, startY, targetX, targetY) {
-    const queue = [{x: startX, y: startY, path: []}];
-    const visited = new Set();
-    visited.add(`${startX},${startY}`);
+// DFS to find ALL shortest paths from ghost to Pacman
+function findAllShortestPaths(startX, startY, targetX, targetY) {
+    const allPaths = [];
+    let shortestLength = Infinity;
     
-    while (queue.length > 0) {
-        const {x, y, path} = queue.shift();
+    function dfs(x, y, path, visited) {
+        // Prune if path is already longer than shortest found
+        if (path.length > shortestLength) return;
         
         // Found target
         if (x === targetX && y === targetY) {
-            return path;
+            if (path.length < shortestLength) {
+                // Found a shorter path, clear previous paths
+                shortestLength = path.length;
+                allPaths.length = 0;
+                allPaths.push([...path]);
+            } else if (path.length === shortestLength) {
+                // Found another path of same shortest length
+                allPaths.push([...path]);
+            }
+            return;
         }
         
         // Try all directions
@@ -210,12 +219,31 @@ function findPathBFS(startX, startY, targetX, targetY) {
             if (nx >= 0 && nx < COLS && ny >= 0 && ny < ROWS && 
                 grid[ny][nx] !== 1 && !visited.has(key)) {
                 visited.add(key);
-                queue.push({x: nx, y: ny, path: [...path, dir]});
+                path.push(dir);
+                dfs(nx, ny, path, visited);
+                path.pop();
+                visited.delete(key);
             }
         }
     }
     
-    return null; // No path found
+    const visited = new Set();
+    visited.add(`${startX},${startY}`);
+    dfs(startX, startY, [], visited);
+    
+    // Return unique first moves from all shortest paths
+    const firstMoves = new Map();
+    for (const path of allPaths) {
+        if (path.length > 0) {
+            const firstMove = path[0];
+            const key = `${firstMove.dx},${firstMove.dy}`;
+            if (!firstMoves.has(key)) {
+                firstMoves.set(key, firstMove);
+            }
+        }
+    }
+    
+    return Array.from(firstMoves.values());
 }
 
 function updateGhosts() {
@@ -234,81 +262,58 @@ function updateGhosts() {
             const gx = Math.round(g.x);
             const gy = Math.round(g.y);
             
-            // Find path to Pacman using BFS
-            const path = findPathBFS(gx, gy, pacX, pacY);
+            // Find ALL shortest paths to Pacman using DFS
+            const shortestPaths = findAllShortestPaths(gx, gy, pacX, pacY);
             
-            if (path && path.length > 0) {
-                // Use the actual BFS path!
-                // First ghost takes optimal path
-                // Other ghosts try alternate routes
-                
-                if (index === 0) {
-                    // Ghost 0: Take the optimal BFS path
-                    g.dir = path[0];
-                    g.timer = 0;
-                } else {
-                    // Other ghosts: Try different strategies
-                    // Ghost 1: Take second best path if available
-                    // Ghost 2+: Take alternate routes
-                    
-                    // Find all alternate paths by trying each valid first move
-                    const validMoves = [];
-                    for (let dir of Object.values(DIR)) {
-                        const nx = gx + dir.dx;
-                        const ny = gy + dir.dy;
-                        
-                        // Don't reverse
-                        if (g.dir && dir.dx === -g.dir.dx && dir.dy === -g.dir.dy) {
-                            continue;
-                        }
-                        
-                        if (nx >= 0 && nx < COLS && ny >= 0 && ny < ROWS && grid[ny][nx] !== 1) {
-                            // Calculate path length from this position
-                            const testPath = findPathBFS(nx, ny, pacX, pacY);
-                            const pathLength = testPath ? testPath.length : 999;
-                            validMoves.push({dir, pathLength});
-                        }
-                    }
-                    
-                    // Sort by path length
-                    validMoves.sort((a, b) => a.pathLength - b.pathLength);
-                    
-                    if (validMoves.length > 0) {
-                        // Each ghost takes a different preference
-                        // Ghost 1 takes 2nd best, Ghost 2 takes 3rd, etc.
-                        const choice = Math.min(index, validMoves.length - 1);
-                        g.dir = validMoves[choice].dir;
-                    } else {
-                        // No valid moves - shouldn't happen but handle it
-                        g.dir = { dx: -g.dir.dx, dy: -g.dir.dy };
-                    }
-                    g.timer = 0;
-                }
-            } else {
-                // No path found or same position - pick random valid direction
-                const dirs = Object.values(DIR);
-                const valid = dirs.filter(d => {
-                    if (g.dir && d.dx === -g.dir.dx && d.dy === -g.dir.dy) {
-                        return false;
-                    }
-                    return canMove(gx, gy, d);
+            if (shortestPaths.length > 0) {
+                // Filter out reverse direction
+                const validPaths = shortestPaths.filter(dir => {
+                    if (!g.dir) return true;
+                    return !(dir.dx === -g.dir.dx && dir.dy === -g.dir.dy);
                 });
                 
-                if (valid.length > 0) {
-                    g.dir = valid[Math.floor(Math.random() * valid.length)];
-                    g.timer = 0;
+                // Use valid paths if available, otherwise allow reverse
+                const pathOptions = validPaths.length > 0 ? validPaths : shortestPaths;
+                
+                // Each ghost takes a different shortest path
+                // Ghost 0: 1st shortest path option
+                // Ghost 1: 2nd shortest path option
+                // Ghost 2: 3rd shortest path option
+                // Ghost 3: 4th shortest path option
+                const pathIndex = Math.min(index, pathOptions.length - 1);
+                g.dir = pathOptions[pathIndex];
+                g.timer = 0;
+            } else {
+                // No path found (shouldn't happen) - try to find any valid move
+                const validDirs = [];
+                for (let dir of Object.values(DIR)) {
+                    const nx = gx + dir.dx;
+                    const ny = gy + dir.dy;
+                    
+                    // Don't reverse unless necessary
+                    if (g.dir && dir.dx === -g.dir.dx && dir.dy === -g.dir.dy) {
+                        continue;
+                    }
+                    
+                    if (nx >= 0 && nx < COLS && ny >= 0 && ny < ROWS && grid[ny][nx] !== 1) {
+                        validDirs.push(dir);
+                    }
+                }
+                
+                if (validDirs.length > 0) {
+                    // Take first valid direction (deterministic)
+                    g.dir = validDirs[0];
                 } else if (g.dir) {
                     // Must reverse
                     g.dir = { dx: -g.dir.dx, dy: -g.dir.dy };
-                    g.timer = 0;
                 }
+                g.timer = 0;
             }
         }
         
-        // Move ghost
+        // Move ghost with consistent speed
         if (g.dir && canMove(g.x, g.y, g.dir)) {
-            // Vary speed slightly per ghost
-            const speed = 0.05 + (index * 0.002);
+            const speed = 0.05;  // Same speed for all ghosts
             g.x += g.dir.dx * speed;
             g.y += g.dir.dy * speed;
         }
