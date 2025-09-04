@@ -439,6 +439,11 @@ function getRandomDirection(ghost) {
     const gx = Math.round(ghost.x);
     const gy = Math.round(ghost.y);
     
+    // Initialize visit tracking if needed
+    if (!ghost.visitedCells) {
+        ghost.visitedCells = new Set();
+    }
+    
     // Add current position to visited cells
     const posKey = `${gx},${gy}`;
     ghost.visitedCells.add(posKey);
@@ -468,26 +473,20 @@ function getRandomDirection(ghost) {
         return unvisitedDirs[Math.floor(Math.random() * unvisitedDirs.length)];
     }
     
-    // If all neighboring cells are visited, we're trapped - backtrack
+    // If all neighboring cells are visited, we're trapped
     if (allValidDirs.length > 0) {
-        // Move back to previous position if possible (allow reversing)
-        if (ghost.lastPosition) {
-            const backDir = {
-                dx: ghost.lastPosition.x - gx,
-                dy: ghost.lastPosition.y - gy
-            };
-            // Verify this is a valid direction
-            for (let dir of Object.values(DIR)) {
-                if (dir.dx === backDir.dx && dir.dy === backDir.dy) {
-                    return dir;
-                }
-            }
+        // Clear visited cells to start fresh exploration
+        // This prevents getting stuck in small loops
+        if (ghost.visitedCells.size > 10) {
+            ghost.visitedCells.clear();
+            ghost.visitedCells.add(posKey); // Keep current position
         }
-        // If can't backtrack, choose any valid direction
+        
+        // Choose any valid direction (which will now be "unvisited" after clear)
         return allValidDirs[Math.floor(Math.random() * allValidDirs.length)];
     }
     
-    // No valid moves at all (shouldn't happen)
+    // No valid moves at all (shouldn't happen in a proper maze)
     return ghost.dir || DIR.UP;
 }
 
@@ -549,18 +548,11 @@ function getTerritorialDirection(ghost, pacX, pacY) {
                 return unvisitedDirs[Math.floor(Math.random() * unvisitedDirs.length)];
             }
             
-            // Backtrack if trapped
+            // If trapped, clear visited cells and continue
             if (allValidDirs.length > 0) {
-                if (ghost.lastPosition) {
-                    const backDir = {
-                        dx: ghost.lastPosition.x - gx,
-                        dy: ghost.lastPosition.y - gy
-                    };
-                    for (let dir of Object.values(DIR)) {
-                        if (dir.dx === backDir.dx && dir.dy === backDir.dy) {
-                            return dir;
-                        }
-                    }
+                if (ghost.visitedCells.size > 10) {
+                    ghost.visitedCells.clear();
+                    ghost.visitedCells.add(posKey);
                 }
                 return allValidDirs[Math.floor(Math.random() * allValidDirs.length)];
             }
