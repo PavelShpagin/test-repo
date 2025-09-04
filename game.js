@@ -187,30 +187,68 @@ function updatePacman() {
     }
 }
 
-// DFS to find ALL shortest paths from ghost to Pacman
-function findAllShortestPaths(startX, startY, targetX, targetY) {
+// Find shortest path using BFS (more efficient for single shortest path)
+function findShortestPath(startX, startY, targetX, targetY) {
+    const queue = [{x: startX, y: startY, path: []}];
+    const visited = new Set();
+    visited.add(`${startX},${startY}`);
+    
+    while (queue.length > 0) {
+        const {x, y, path} = queue.shift();
+        
+        if (x === targetX && y === targetY) {
+            return path;
+        }
+        
+        for (let dir of Object.values(DIR)) {
+            const nx = x + dir.dx;
+            const ny = y + dir.dy;
+            const key = `${nx},${ny}`;
+            
+            if (nx >= 0 && nx < COLS && ny >= 0 && ny < ROWS && 
+                grid[ny][nx] !== 1 && !visited.has(key)) {
+                visited.add(key);
+                queue.push({x: nx, y: ny, path: [...path, dir]});
+            }
+        }
+    }
+    
+    return null;
+}
+
+// Find paths with strategic divergence points for each ghost
+function findStrategicPaths(startX, startY, targetX, targetY, ghostIndex) {
+    // First, find the absolute shortest path
+    const shortestPath = findShortestPath(startX, startY, targetX, targetY);
+    
+    if (!shortestPath || shortestPath.length === 0) {
+        return null;
+    }
+    
+    // Ghost 0: Take the shortest path
+    if (ghostIndex === 0) {
+        return shortestPath[0];
+    }
+    
+    // For other ghosts, find paths that diverge at specific points
+    // Ghost 1: Different last move
+    // Ghost 2: Different second-to-last move
+    // Ghost 3: Different third-to-last move
+    
+    const divergencePoint = Math.min(ghostIndex, shortestPath.length);
+    
+    // Find all paths and filter for ones that diverge at the right point
     const allPaths = [];
-    let shortestLength = Infinity;
+    const maxLength = shortestPath.length + 2; // Allow slightly longer paths
     
     function dfs(x, y, path, visited) {
-        // Prune if path is already longer than shortest found
-        if (path.length > shortestLength) return;
+        if (path.length > maxLength) return;
         
-        // Found target
         if (x === targetX && y === targetY) {
-            if (path.length < shortestLength) {
-                // Found a shorter path, clear previous paths
-                shortestLength = path.length;
-                allPaths.length = 0;
-                allPaths.push([...path]);
-            } else if (path.length === shortestLength) {
-                // Found another path of same shortest length
-                allPaths.push([...path]);
-            }
+            allPaths.push([...path]);
             return;
         }
         
-        // Try all directions
         for (let dir of Object.values(DIR)) {
             const nx = x + dir.dx;
             const ny = y + dir.dy;
@@ -231,19 +269,41 @@ function findAllShortestPaths(startX, startY, targetX, targetY) {
     visited.add(`${startX},${startY}`);
     dfs(startX, startY, [], visited);
     
-    // Return unique first moves from all shortest paths
-    const firstMoves = new Map();
+    // Sort paths by length
+    allPaths.sort((a, b) => a.length - b.length);
+    
+    // Find a path that diverges at the specified point from the end
     for (const path of allPaths) {
-        if (path.length > 0) {
-            const firstMove = path[0];
-            const key = `${firstMove.dx},${firstMove.dy}`;
-            if (!firstMoves.has(key)) {
-                firstMoves.set(key, firstMove);
+        if (path.length === 0) continue;
+        
+        // Check if this path diverges at the right point
+        const checkIndex = path.length - divergencePoint;
+        if (checkIndex >= 0 && checkIndex < path.length) {
+            // For divergence, check if the move at this point differs from shortest path
+            const shortestCheckIndex = shortestPath.length - divergencePoint;
+            
+            if (shortestCheckIndex >= 0 && shortestCheckIndex < shortestPath.length) {
+                const pathMove = path[checkIndex];
+                const shortestMove = shortestPath[shortestCheckIndex];
+                
+                // If moves differ at this point, this is a good alternative path
+                if (pathMove.dx !== shortestMove.dx || pathMove.dy !== shortestMove.dy) {
+                    return path[0]; // Return first move of this path
+                }
             }
         }
     }
     
-    return Array.from(firstMoves.values());
+    // Fallback: return any different first move from shortest path
+    for (const path of allPaths) {
+        if (path.length > 0 && 
+            (path[0].dx !== shortestPath[0].dx || path[0].dy !== shortestPath[0].dy)) {
+            return path[0];
+        }
+    }
+    
+    // Last resort: return shortest path first move
+    return shortestPath[0];
 }
 
 function updateGhosts() {
@@ -262,29 +322,38 @@ function updateGhosts() {
             const gx = Math.round(g.x);
             const gy = Math.round(g.y);
             
-            // Find ALL shortest paths to Pacman using DFS
-            const shortestPaths = findAllShortestPaths(gx, gy, pacX, pacY);
+            // Find strategic path for this ghost
+            const nextMove = findStrategicPaths(gx, gy, pacX, pacY, index);
             
-            if (shortestPaths.length > 0) {
-                // Filter out reverse direction
-                const validPaths = shortestPaths.filter(dir => {
-                    if (!g.dir) return true;
-                    return !(dir.dx === -g.dir.dx && dir.dy === -g.dir.dy);
-                });
-                
-                // Use valid paths if available, otherwise allow reverse
-                const pathOptions = validPaths.length > 0 ? validPaths : shortestPaths;
-                
-                // Each ghost takes a different shortest path
-                // Ghost 0: 1st shortest path option
-                // Ghost 1: 2nd shortest path option
-                // Ghost 2: 3rd shortest path option
-                // Ghost 3: 4th shortest path option
-                const pathIndex = Math.min(index, pathOptions.length - 1);
-                g.dir = pathOptions[pathIndex];
-                g.timer = 0;
+            if (nextMove) {
+                // Check if it's not a reverse (unless no choice)
+                if (!g.dir || !(nextMove.dx === -g.dir.dx && nextMove.dy === -g.dir.dy)) {
+                    g.dir = nextMove;
+                    g.timer = 0;
+                } else {
+                    // Try to find alternative that's not reverse
+                    const validDirs = [];
+                    for (let dir of Object.values(DIR)) {
+                        const nx = gx + dir.dx;
+                        const ny = gy + dir.dy;
+                        
+                        if (dir.dx === -g.dir.dx && dir.dy === -g.dir.dy) continue;
+                        
+                        if (nx >= 0 && nx < COLS && ny >= 0 && ny < ROWS && grid[ny][nx] !== 1) {
+                            validDirs.push(dir);
+                        }
+                    }
+                    
+                    if (validDirs.length > 0) {
+                        g.dir = validDirs[0];
+                    } else {
+                        // Must reverse
+                        g.dir = nextMove;
+                    }
+                    g.timer = 0;
+                }
             } else {
-                // No path found (shouldn't happen) - try to find any valid move
+                // No path found (shouldn't happen) - find any valid move
                 const validDirs = [];
                 for (let dir of Object.values(DIR)) {
                     const nx = gx + dir.dx;
