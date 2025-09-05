@@ -288,7 +288,7 @@ function resetLevel() {
                 const ghost = {
                     x: x,
                     y: y,
-                    dir: DIR.UP,
+                    dir: null,  // Start with no direction - will be set by strategy immediately
                     color: GHOST_COLORS[ghostIndex],
                     timer: 0,
                     hasLeftBase: false,
@@ -487,7 +487,7 @@ function getRandomDirection(ghost) {
     }
     
     // No valid moves at all (shouldn't happen in a proper maze)
-    return ghost.dir || DIR.UP;
+    return ghost.dir || null;
 }
 
 // Territorial AI: Guard a quadrant, chase if Pacman enters
@@ -682,16 +682,22 @@ function updateGhosts() {
             // Update last position for all strategies
             g.lastPosition = { x: gx, y: gy };
             
+            // Check if ghost is still in spawn area
+            const inSpawnArea = (gy >= 9 && gy <= 11 && gx >= 8 && gx <= 10);
+            
             // Mark ghost as having left base once it's outside the spawn area
-            if (!g.hasLeftBase && (gy < 8 || gy > 12 || gx < 7 || gx > 11)) {
+            if (!g.hasLeftBase && !inSpawnArea) {
                 g.hasLeftBase = true;
             }
             
-            // Always use the ghost's strategy - no special initial behavior
-            // Choose direction based on ghost's strategy
             let nextMove = null;
             
-            switch (g.strategy) {
+            // If in spawn area, move up to exit first
+            if (inSpawnArea && !g.hasLeftBase) {
+                nextMove = DIR.UP;
+            } else {
+                // Use the ghost's strategy once out of spawn
+                switch (g.strategy) {
                 case GHOST_STRATEGY.RANDOM:
                     nextMove = getRandomDirection(g);
                     break;
@@ -703,6 +709,7 @@ function updateGhosts() {
                     break;
                 default:
                     nextMove = getRandomDirection(g);
+                }
             }
             
             if (nextMove) {
