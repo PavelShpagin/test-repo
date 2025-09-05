@@ -682,22 +682,15 @@ function updateGhosts() {
             // Update last position for all strategies
             g.lastPosition = { x: gx, y: gy };
             
-            // Check if ghost is still in spawn area
-            const inSpawnArea = (gy >= 9 && gy <= 11 && gx >= 8 && gx <= 10);
-            
             // Mark ghost as having left base once it's outside the spawn area
-            if (!g.hasLeftBase && !inSpawnArea) {
+            if (!g.hasLeftBase && (gy < 8 || gy > 12 || gx < 7 || gx > 11)) {
                 g.hasLeftBase = true;
             }
             
+            // Always use the ghost's strategy immediately, even in spawn
             let nextMove = null;
             
-            // If in spawn area, move up to exit first
-            if (inSpawnArea && !g.hasLeftBase) {
-                nextMove = DIR.UP;
-            } else {
-                // Use the ghost's strategy once out of spawn
-                switch (g.strategy) {
+            switch (g.strategy) {
                 case GHOST_STRATEGY.RANDOM:
                     nextMove = getRandomDirection(g);
                     break;
@@ -709,7 +702,6 @@ function updateGhosts() {
                     break;
                 default:
                     nextMove = getRandomDirection(g);
-                }
             }
             
             if (nextMove) {
