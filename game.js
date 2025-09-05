@@ -295,7 +295,9 @@ function resetLevel() {
                     strategy: strategy,
                     territory: null,
                     visitedCells: new Set(), // Track all visited cells for random strategy
-                    lastPosition: null
+                    lastPosition: null,
+                    dfsPath: [],  // DFS path for territorial patrol
+                    dfsIndex: 0   // Current position in DFS path
                 };
                 
                 // Assign territory for territorial ghosts
@@ -514,7 +516,7 @@ function getRandomDirection(ghost) {
     return ghost.dir || null;
 }
 
-// Territorial AI: Guard a quadrant, chase if Pacman enters
+// Territorial AI: Guard a quadrant with DFS patrol, chase if Pacman enters
 function getTerritorialDirection(ghost, pacX, pacY) {
     const gx = Math.round(ghost.x);
     const gy = Math.round(ghost.y);
@@ -526,64 +528,135 @@ function getTerritorialDirection(ghost, pacX, pacY) {
     const pacmanInTerritory = pacX >= territory.minX && pacX < territory.maxX &&
                              pacY >= territory.minY && pacY < territory.maxY;
     
+    // Check if ghost is in their territory
+    const ghostInTerritory = gx >= territory.minX && gx < territory.maxX &&
+                            gy >= territory.minY && gy < territory.maxY;
+    
     if (pacmanInTerritory) {
-        // Use DFS/BFS to find shortest path to Pacman
+        // Chase Pacman using shortest path (Dijkstra)
         const path = findShortestPath(gx, gy, pacX, pacY);
-        return (path && path.length > 0) ? path[0] : getRandomDirection(ghost);
-    } else {
-        // Stay in territory - move towards center if outside
+        return (path && path.length > 0) ? path[0] : null;
+    }
+    
+    // If not in territory, move back to it first
+    if (!ghostInTerritory) {
         const centerX = Math.floor((territory.minX + territory.maxX) / 2);
         const centerY = Math.floor((territory.minY + territory.maxY) / 2);
+        const path = findShortestPath(gx, gy, centerX, centerY);
+        return (path && path.length > 0) ? path[0] : null;
+    }
+    
+    // DFS patrol within territory
+    // Initialize DFS path if needed
+    if (!ghost.dfsPath || ghost.dfsPath.length === 0 || ghost.dfsIndex >= ghost.dfsPath.length) {
+        ghost.dfsPath = generateDFSPath(territory);
+        ghost.dfsIndex = 0;
+    }
+    
+    // Get target position from DFS path
+    if (ghost.dfsPath && ghost.dfsPath.length > 0) {
+        const target = ghost.dfsPath[ghost.dfsIndex];
         
-        const ghostInTerritory = gx >= territory.minX && gx < territory.maxX &&
-                                gy >= territory.minY && gy < territory.maxY;
+        // If we reached the target, move to next point in path
+        if (gx === target.x && gy === target.y) {
+            ghost.dfsIndex = (ghost.dfsIndex + 1) % ghost.dfsPath.length; // Loop the path
+            if (ghost.dfsIndex < ghost.dfsPath.length) {
+                const nextTarget = ghost.dfsPath[ghost.dfsIndex];
+                return getDirectionToward(gx, gy, nextTarget.x, nextTarget.y);
+            }
+        }
         
-        if (!ghostInTerritory) {
-            // Move back to territory
-            const path = findShortestPath(gx, gy, centerX, centerY);
-            return (path && path.length > 0) ? path[0] : getRandomDirection(ghost);
-        } else {
-            // Random movement within territory (use same unvisited logic)
-            const posKey = `${gx},${gy}`;
-            if (!ghost.visitedCells) ghost.visitedCells = new Set();
-            ghost.visitedCells.add(posKey);
-            
-            const unvisitedDirs = [];
-            const allValidDirs = [];
-            
-            for (let dir of Object.values(DIR)) {
-                const nx = gx + dir.dx;
-                const ny = gy + dir.dy;
-                
-                if (nx >= territory.minX && nx < territory.maxX &&
-                    ny >= territory.minY && ny < territory.maxY &&
-                    grid[ny][nx] !== 1) {
-                    const nextPosKey = `${nx},${ny}`;
-                    allValidDirs.push(dir);
-                    
-                    if (!ghost.visitedCells.has(nextPosKey)) {
-                        unvisitedDirs.push(dir);
-                    }
-                }
-            }
-            
-            // Prefer unvisited cells
-            if (unvisitedDirs.length > 0) {
-                return unvisitedDirs[Math.floor(Math.random() * unvisitedDirs.length)];
-            }
-            
-            // If trapped, clear visited cells and continue
-            if (allValidDirs.length > 0) {
-                if (ghost.visitedCells.size > 10) {
-                    ghost.visitedCells.clear();
-                    ghost.visitedCells.add(posKey);
-                }
-                return allValidDirs[Math.floor(Math.random() * allValidDirs.length)];
-            }
-            
-            return getRandomDirection(ghost);
+        // Move toward current target
+        return getDirectionToward(gx, gy, target.x, target.y);
+    }
+    
+    return null;
+}
+
+// Generate DFS path for patrolling a territory
+function generateDFSPath(territory) {
+    const path = [];
+    const visited = new Set();
+    
+    // Start from center of territory
+    const startX = Math.floor((territory.minX + territory.maxX) / 2);
+    const startY = Math.floor((territory.minY + territory.maxY) / 2);
+    
+    // DFS to visit all accessible cells in territory
+    function dfs(x, y) {
+        const key = `${x},${y}`;
+        if (visited.has(key)) return;
+        
+        // Check if position is valid and in territory
+        if (x < territory.minX || x >= territory.maxX || 
+            y < territory.minY || y >= territory.maxY ||
+            grid[y][x] === 1) {
+            return;
+        }
+        
+        visited.add(key);
+        path.push({x, y});
+        
+        // Visit neighbors in a consistent order for predictable patrol
+        const dirs = [DIR.UP, DIR.RIGHT, DIR.DOWN, DIR.LEFT];
+        for (let dir of dirs) {
+            dfs(x + dir.dx, y + dir.dy);
         }
     }
+    
+    dfs(startX, startY);
+    
+    // If path is too short, just patrol the perimeter
+    if (path.length < 5) {
+        path.length = 0;
+        // Create a simple perimeter path
+        for (let x = territory.minX; x < territory.maxX; x++) {
+            if (grid[territory.minY][x] !== 1) path.push({x, y: territory.minY});
+        }
+        for (let y = territory.minY; y < territory.maxY; y++) {
+            if (grid[y][territory.maxX-1] !== 1) path.push({x: territory.maxX-1, y});
+        }
+        for (let x = territory.maxX-1; x >= territory.minX; x--) {
+            if (grid[territory.maxY-1][x] !== 1) path.push({x, y: territory.maxY-1});
+        }
+        for (let y = territory.maxY-1; y >= territory.minY; y--) {
+            if (grid[y][territory.minX] !== 1) path.push({x: territory.minX, y});
+        }
+    }
+    
+    return path;
+}
+
+// Get direction to move from current position toward target
+function getDirectionToward(fromX, fromY, toX, toY) {
+    const dx = Math.sign(toX - fromX);
+    const dy = Math.sign(toY - fromY);
+    
+    // Prioritize the axis with greater distance
+    if (Math.abs(toX - fromX) > Math.abs(toY - fromY)) {
+        if (dx !== 0 && grid[fromY][fromX + dx] !== 1) {
+            return {dx, dy: 0};
+        }
+        if (dy !== 0 && grid[fromY + dy][fromX] !== 1) {
+            return {dx: 0, dy};
+        }
+    } else {
+        if (dy !== 0 && grid[fromY + dy][fromX] !== 1) {
+            return {dx: 0, dy};
+        }
+        if (dx !== 0 && grid[fromY][fromX + dx] !== 1) {
+            return {dx, dy: 0};
+        }
+    }
+    
+    // Try any valid direction
+    for (let dir of Object.values(DIR)) {
+        if (grid[fromY + dir.dy] && grid[fromY + dir.dy][fromX + dir.dx] !== 1) {
+            return dir;
+        }
+    }
+    
+    return null;
 }
 
 // New Tracking AI with probability-based movement
