@@ -682,52 +682,36 @@ function updateGhosts() {
             // Update last position for all strategies
             g.lastPosition = { x: gx, y: gy };
             
-            // Check if ghost just left the base (around row 10, moving up)
-            if (!g.hasLeftBase && gy <= 10 && gy >= 8) {
-                // Check if we're at the exit point (row 10, center area)
-                if (gy === 10 && gx >= 8 && gx <= 10) {
-                    g.hasLeftBase = true;
-                    
-                    // Blue ghost (index 1) turns left, Orange (index 3) turns right
-                    if (index === 1) {
-                        g.dir = DIR.LEFT;
-                        g.timer = 0;
-                    } else if (index === 3) {
-                        g.dir = DIR.RIGHT;
-                        g.timer = 0;
-                    }
-                    // Red (0) and Pink (2) continue with normal pathfinding
-                }
+            // Mark ghost as having left base once it's outside the spawn area
+            if (!g.hasLeftBase && (gy < 8 || gy > 12 || gx < 7 || gx > 11)) {
+                g.hasLeftBase = true;
             }
             
-            // Skip strategic pathfinding if we just did an initial turn
-            if ((index === 1 || index === 3) && g.timer === 0) {
-                // Just set the initial direction, skip pathfinding this frame
-            } else {
-                // Choose direction based on ghost's strategy
-                let nextMove = null;
-                
-                switch (g.strategy) {
-                    case GHOST_STRATEGY.RANDOM:
-                        nextMove = getRandomDirection(g);
-                        break;
-                    case GHOST_STRATEGY.TERRITORIAL:
-                        nextMove = getTerritorialDirection(g, pacX, pacY);
-                        break;
-                    case GHOST_STRATEGY.TRACKING:
-                        nextMove = getTrackingDirection(g, index, pacX, pacY);
-                        break;
-                    default:
-                        nextMove = getRandomDirection(g);
-                }
-                
-                if (nextMove) {
-                    // Check if it's not a reverse (unless no choice)
-                    if (!g.dir || !(nextMove.dx === -g.dir.dx && nextMove.dy === -g.dir.dy)) {
-                        g.dir = nextMove;
-                        g.timer = 0;
-                    } else {
-                        // Try to find alternative that's not reverse
+            // Always use the ghost's strategy - no special initial behavior
+            // Choose direction based on ghost's strategy
+            let nextMove = null;
+            
+            switch (g.strategy) {
+                case GHOST_STRATEGY.RANDOM:
+                    nextMove = getRandomDirection(g);
+                    break;
+                case GHOST_STRATEGY.TERRITORIAL:
+                    nextMove = getTerritorialDirection(g, pacX, pacY);
+                    break;
+                case GHOST_STRATEGY.TRACKING:
+                    nextMove = getTrackingDirection(g, index, pacX, pacY);
+                    break;
+                default:
+                    nextMove = getRandomDirection(g);
+            }
+            
+            if (nextMove) {
+                // Check if it's not a reverse (unless no choice)
+                if (!g.dir || !(nextMove.dx === -g.dir.dx && nextMove.dy === -g.dir.dy)) {
+                    g.dir = nextMove;
+                    g.timer = 0;
+                } else {
+                    // Try to find alternative that's not reverse
                         const validDirs = [];
                         for (let dir of Object.values(DIR)) {
                             const nx = gx + dir.dx;
@@ -774,7 +758,6 @@ function updateGhosts() {
                     }
                     g.timer = 0;
                 }
-            }
         }
         
         // Move ghost with consistent speed
