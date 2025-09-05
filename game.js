@@ -298,7 +298,8 @@ function resetLevel() {
                     lastPosition: null,
                     dfsPath: [],  // DFS path for territorial patrol
                     dfsIndex: 0,  // Current position in DFS path
-                    wasChasing: false  // Track if territorial ghost was chasing
+                    wasChasing: false,  // Track if territorial ghost was chasing
+                    pacmanWasInTerritory: false  // Track if Pacman was in territory last frame
                 };
                 
                 // Assign territory for territorial ghosts
@@ -847,11 +848,25 @@ function updateGhosts() {
             g.visitedCells.clear();
         }
         
-        // Only update direction at grid centers
+        // Check if Pacman just entered territorial ghost's territory
+        let pacmanJustEntered = false;
+        if (g.strategy === GHOST_STRATEGY.TERRITORIAL && g.territory) {
+            const pacmanInTerritory = pacX >= g.territory.minX && pacX < g.territory.maxX &&
+                                     pacY >= g.territory.minY && pacY < g.territory.maxY;
+            pacmanJustEntered = pacmanInTerritory && !g.pacmanWasInTerritory;
+            g.pacmanWasInTerritory = pacmanInTerritory;
+        }
+        
+        // Only update direction at grid centers (or immediately when Pacman enters territory)
         const nearCenter = Math.abs(g.x - Math.round(g.x)) < 0.1 && 
                           Math.abs(g.y - Math.round(g.y)) < 0.1;
         
-        if (nearCenter && g.timer > 10) {
+        // Territorial ghosts can update immediately when Pacman is in their territory
+        const canUpdate = (nearCenter && g.timer > 10) || 
+                         (pacmanJustEntered && nearCenter) ||
+                         (g.strategy === GHOST_STRATEGY.TERRITORIAL && g.pacmanWasInTerritory && nearCenter && g.timer > 2);
+        
+        if (canUpdate) {
             const gx = Math.round(g.x);
             const gy = Math.round(g.y);
             
