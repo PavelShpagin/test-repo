@@ -524,7 +524,7 @@ function getTerritorialDirection(ghost, pacX, pacY) {
     
     if (!territory) return getRandomDirection(ghost);
     
-    // Check if Pacman is in our territory
+    // Check if Pacman is in our territory - this check happens EVERY frame
     const pacmanInTerritory = pacX >= territory.minX && pacX < territory.maxX &&
                              pacY >= territory.minY && pacY < territory.maxY;
     
@@ -532,7 +532,12 @@ function getTerritorialDirection(ghost, pacX, pacY) {
     const ghostInTerritory = gx >= territory.minX && gx < territory.maxX &&
                             gy >= territory.minY && gy < territory.maxY;
     
+    // IMMEDIATELY switch to chase mode if Pacman enters territory
     if (pacmanInTerritory) {
+        // Clear DFS state when switching to chase mode
+        ghost.dfsPath = null;
+        ghost.dfsIndex = 0;
+        
         // Chase Pacman using shortest path (Dijkstra)
         const path = findShortestPath(gx, gy, pacX, pacY);
         return (path && path.length > 0) ? path[0] : null;
@@ -546,9 +551,9 @@ function getTerritorialDirection(ghost, pacX, pacY) {
         return (path && path.length > 0) ? path[0] : null;
     }
     
-    // DFS patrol within territory
-    // Initialize DFS path if needed
-    if (!ghost.dfsPath || ghost.dfsPath.length === 0 || ghost.dfsIndex >= ghost.dfsPath.length) {
+    // DFS patrol within territory ONLY
+    // Initialize DFS path if needed or regenerate if cleared
+    if (!ghost.dfsPath || ghost.dfsPath.length === 0) {
         ghost.dfsPath = generateDFSPath(territory);
         ghost.dfsIndex = 0;
     }
@@ -562,12 +567,12 @@ function getTerritorialDirection(ghost, pacX, pacY) {
             ghost.dfsIndex = (ghost.dfsIndex + 1) % ghost.dfsPath.length; // Loop the path
             if (ghost.dfsIndex < ghost.dfsPath.length) {
                 const nextTarget = ghost.dfsPath[ghost.dfsIndex];
-                return getDirectionToward(gx, gy, nextTarget.x, nextTarget.y);
+                return getDirectionTowardInTerritory(gx, gy, nextTarget.x, nextTarget.y, territory);
             }
         }
         
-        // Move toward current target
-        return getDirectionToward(gx, gy, target.x, target.y);
+        // Move toward current target, but stay within territory
+        return getDirectionTowardInTerritory(gx, gy, target.x, target.y, territory);
     }
     
     return null;
@@ -627,7 +632,47 @@ function generateDFSPath(territory) {
     return path;
 }
 
-// Get direction to move from current position toward target
+// Get direction to move toward target, but stay within territory bounds
+function getDirectionTowardInTerritory(fromX, fromY, toX, toY, territory) {
+    const dx = Math.sign(toX - fromX);
+    const dy = Math.sign(toY - fromY);
+    
+    // Helper to check if position is in territory
+    const inTerritory = (x, y) => {
+        return x >= territory.minX && x < territory.maxX &&
+               y >= territory.minY && y < territory.maxY;
+    };
+    
+    // Prioritize the axis with greater distance
+    if (Math.abs(toX - fromX) > Math.abs(toY - fromY)) {
+        if (dx !== 0 && grid[fromY][fromX + dx] !== 1 && inTerritory(fromX + dx, fromY)) {
+            return {dx, dy: 0};
+        }
+        if (dy !== 0 && grid[fromY + dy][fromX] !== 1 && inTerritory(fromX, fromY + dy)) {
+            return {dx: 0, dy};
+        }
+    } else {
+        if (dy !== 0 && grid[fromY + dy][fromX] !== 1 && inTerritory(fromX, fromY + dy)) {
+            return {dx: 0, dy};
+        }
+        if (dx !== 0 && grid[fromY][fromX + dx] !== 1 && inTerritory(fromX + dx, fromY)) {
+            return {dx, dy: 0};
+        }
+    }
+    
+    // Try any valid direction within territory
+    for (let dir of Object.values(DIR)) {
+        const nx = fromX + dir.dx;
+        const ny = fromY + dir.dy;
+        if (grid[ny] && grid[ny][nx] !== 1 && inTerritory(nx, ny)) {
+            return dir;
+        }
+    }
+    
+    return null;
+}
+
+// Get direction to move from current position toward target (general purpose)
 function getDirectionToward(fromX, fromY, toX, toY) {
     const dx = Math.sign(toX - fromX);
     const dy = Math.sign(toY - fromY);
