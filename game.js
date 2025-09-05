@@ -516,47 +516,17 @@ function getRandomDirection(ghost) {
     return ghost.dir || null;
 }
 
-// Territorial AI: Guard a quadrant with DFS patrol, chase if Pacman enters
-function getTerritorialDirection(ghost, pacX, pacY) {
+// Territorial DFS patrol move - only moves within territory subgraph
+function getTerritorialDFSMove(ghost) {
     const gx = Math.round(ghost.x);
     const gy = Math.round(ghost.y);
     const territory = ghost.territory;
     
-    if (!territory) return getRandomDirection(ghost);
+    if (!territory) return null;
     
-    // Check if Pacman is in our territory - this check happens EVERY frame
-    const pacmanInTerritory = pacX >= territory.minX && pacX < territory.maxX &&
-                             pacY >= territory.minY && pacY < territory.maxY;
-    
-    // Check if ghost is in their territory
-    const ghostInTerritory = gx >= territory.minX && gx < territory.maxX &&
-                            gy >= territory.minY && gy < territory.maxY;
-    
-    // IMMEDIATELY switch to chase mode if Pacman enters territory
-    if (pacmanInTerritory) {
-        // Clear DFS state when switching to chase mode
-        ghost.dfsPath = null;
-        ghost.dfsIndex = 0;
-        
-        // Chase Pacman but STAY WITHIN TERRITORY
-        // Use direct movement toward Pacman, constrained to territory
-        return getDirectionTowardInTerritory(gx, gy, pacX, pacY, territory);
-    }
-    
-    // If not in territory, move back to it first
-    if (!ghostInTerritory) {
-        const centerX = Math.floor((territory.minX + territory.maxX) / 2);
-        const centerY = Math.floor((territory.minY + territory.maxY) / 2);
-        
-        // Move toward territory center, but use simple direction
-        // This should only happen at spawn, so just move toward center
-        return getDirectionToward(gx, gy, centerX, centerY);
-    }
-    
-    // DFS patrol within territory ONLY
-    // Initialize DFS path if needed or regenerate if cleared
+    // Initialize or regenerate DFS path if needed
     if (!ghost.dfsPath || ghost.dfsPath.length === 0) {
-        ghost.dfsPath = generateDFSPath(territory);
+        ghost.dfsPath = generateDFSPathForTerritory(territory);
         ghost.dfsIndex = 0;
     }
     
@@ -567,21 +537,19 @@ function getTerritorialDirection(ghost, pacX, pacY) {
         // If we reached the target, move to next point in path
         if (gx === target.x && gy === target.y) {
             ghost.dfsIndex = (ghost.dfsIndex + 1) % ghost.dfsPath.length; // Loop the path
-            if (ghost.dfsIndex < ghost.dfsPath.length) {
-                const nextTarget = ghost.dfsPath[ghost.dfsIndex];
-                return getDirectionTowardInTerritory(gx, gy, nextTarget.x, nextTarget.y, territory);
-            }
+            const nextTarget = ghost.dfsPath[ghost.dfsIndex];
+            return getDirectionTowardInTerritory(gx, gy, nextTarget.x, nextTarget.y, territory);
         }
         
-        // Move toward current target, but stay within territory
+        // Move toward current target, constrained to territory
         return getDirectionTowardInTerritory(gx, gy, target.x, target.y, territory);
     }
     
     return null;
 }
 
-// Generate DFS path for patrolling a territory
-function generateDFSPath(territory) {
+// Generate DFS path for patrolling a territory - only includes cells in territory subgraph
+function generateDFSPathForTerritory(territory) {
     const path = [];
     const visited = new Set();
     
@@ -589,45 +557,61 @@ function generateDFSPath(territory) {
     const startX = Math.floor((territory.minX + territory.maxX) / 2);
     const startY = Math.floor((territory.minY + territory.maxY) / 2);
     
-    // DFS to visit all accessible cells in territory
+    // DFS to visit all accessible cells ONLY within territory bounds
     function dfs(x, y) {
+        // IGNORE nodes outside territory - never move there
+        if (x < territory.minX || x >= territory.maxX || 
+            y < territory.minY || y >= territory.maxY) {
+            return; // Outside territory subgraph - ignore
+        }
+        
         const key = `${x},${y}`;
         if (visited.has(key)) return;
         
-        // Check if position is valid and in territory
-        if (x < territory.minX || x >= territory.maxX || 
-            y < territory.minY || y >= territory.maxY ||
-            grid[y][x] === 1) {
-            return;
-        }
+        // Check if wall
+        if (grid[y][x] === 1) return;
         
         visited.add(key);
         path.push({x, y});
         
-        // Visit neighbors in a consistent order for predictable patrol
+        // Visit neighbors in consistent order for predictable patrol
+        // But only consider cells within territory
         const dirs = [DIR.UP, DIR.RIGHT, DIR.DOWN, DIR.LEFT];
         for (let dir of dirs) {
-            dfs(x + dir.dx, y + dir.dy);
+            const nx = x + dir.dx;
+            const ny = y + dir.dy;
+            // Only recurse if next cell is in territory
+            if (nx >= territory.minX && nx < territory.maxX &&
+                ny >= territory.minY && ny < territory.maxY) {
+                dfs(nx, ny);
+            }
         }
     }
     
+    // Start DFS from center
     dfs(startX, startY);
     
-    // If path is too short, just patrol the perimeter
-    if (path.length < 5) {
+    // If path is empty or too short, create simple patrol within bounds
+    if (path.length < 3) {
         path.length = 0;
-        // Create a simple perimeter path
-        for (let x = territory.minX; x < territory.maxX; x++) {
-            if (grid[territory.minY][x] !== 1) path.push({x, y: territory.minY});
-        }
-        for (let y = territory.minY; y < territory.maxY; y++) {
-            if (grid[y][territory.maxX-1] !== 1) path.push({x: territory.maxX-1, y});
-        }
-        for (let x = territory.maxX-1; x >= territory.minX; x--) {
-            if (grid[territory.maxY-1][x] !== 1) path.push({x, y: territory.maxY-1});
-        }
-        for (let y = territory.maxY-1; y >= territory.minY; y--) {
-            if (grid[y][territory.minX] !== 1) path.push({x: territory.minX, y});
+        // Just move in a small square within territory
+        const cx = Math.floor((territory.minX + territory.maxX) / 2);
+        const cy = Math.floor((territory.minY + territory.maxY) / 2);
+        
+        // Try to create a small patrol loop
+        const positions = [
+            {x: cx, y: cy},
+            {x: cx + 1, y: cy},
+            {x: cx + 1, y: cy + 1},
+            {x: cx, y: cy + 1}
+        ];
+        
+        for (let pos of positions) {
+            if (pos.x >= territory.minX && pos.x < territory.maxX &&
+                pos.y >= territory.minY && pos.y < territory.maxY &&
+                grid[pos.y] && grid[pos.y][pos.x] !== 1) {
+                path.push(pos);
+            }
         }
     }
     
@@ -807,6 +791,15 @@ function updateGhosts() {
     const pacX = Math.round(pacman.x);
     const pacY = Math.round(pacman.y);
     
+    // Single Dijkstra pass for all ghosts to find shortest path to Pacman
+    const ghostPaths = [];
+    ghosts.forEach((g) => {
+        const gx = Math.round(g.x);
+        const gy = Math.round(g.y);
+        const path = findShortestPath(gx, gy, pacX, pacY);
+        ghostPaths.push(path && path.length > 0 ? path[0] : null);
+    });
+    
     ghosts.forEach((g, index) => {
         g.timer++;
         
@@ -831,35 +824,74 @@ function updateGhosts() {
                 g.hasLeftBase = true;
             }
             
-            // Always use the ghost's strategy immediately, even in spawn
+            // Get Dijkstra result for this ghost
+            const dijkstraMove = ghostPaths[index];
             let nextMove = null;
             
             switch (g.strategy) {
                 case GHOST_STRATEGY.RANDOM:
                     nextMove = getRandomDirection(g);
                     break;
+                    
                 case GHOST_STRATEGY.TERRITORIAL:
-                    nextMove = getTerritorialDirection(g, pacX, pacY);
-                    // Extra safety: ensure territorial ghost never leaves territory
-                    if (nextMove && g.territory) {
-                        const nextX = gx + nextMove.dx;
-                        const nextY = gy + nextMove.dy;
-                        const inTerritory = nextX >= g.territory.minX && nextX < g.territory.maxX &&
-                                           nextY >= g.territory.minY && nextY < g.territory.maxY;
-                        
-                        // Only allow moves within territory, unless ghost is returning to territory
+                    if (g.territory) {
+                        const pacmanInTerritory = pacX >= g.territory.minX && pacX < g.territory.maxX &&
+                                                 pacY >= g.territory.minY && pacY < g.territory.maxY;
                         const ghostInTerritory = gx >= g.territory.minX && gx < g.territory.maxX &&
-                                                gy >= g.territory.minY && gy < g.territory.maxY;
+                                               gy >= g.territory.minY && gy < g.territory.maxY;
                         
-                        if (ghostInTerritory && !inTerritory) {
-                            // Ghost is in territory but move would leave it - block it!
-                            nextMove = null;
+                        if (pacmanInTerritory && dijkstraMove) {
+                            // Pacman is in territory - try to use Dijkstra
+                            const nextX = gx + dijkstraMove.dx;
+                            const nextY = gy + dijkstraMove.dy;
+                            const moveStaysInTerritory = nextX >= g.territory.minX && nextX < g.territory.maxX &&
+                                                        nextY >= g.territory.minY && nextY < g.territory.maxY;
+                            
+                            if (ghostInTerritory && moveStaysInTerritory) {
+                                // Use Dijkstra move - it keeps us in territory
+                                nextMove = dijkstraMove;
+                                // Clear DFS when switching to chase
+                                if (!g.wasChasing) {
+                                    g.dfsPath = null;
+                                    g.dfsIndex = 0;
+                                    g.wasChasing = true;
+                                }
+                            } else if (!ghostInTerritory) {
+                                // Return to territory first
+                                const centerX = Math.floor((g.territory.minX + g.territory.maxX) / 2);
+                                const centerY = Math.floor((g.territory.minY + g.territory.maxY) / 2);
+                                nextMove = getDirectionToward(gx, gy, centerX, centerY);
+                            } else {
+                                // Can't chase without leaving - continue DFS
+                                g.wasChasing = false;
+                                nextMove = getTerritorialDFSMove(g);
+                            }
+                        } else {
+                            // Pacman not in territory - do DFS patrol
+                            if (g.wasChasing) {
+                                // Just stopped chasing - reinitialize DFS
+                                g.dfsPath = null;
+                                g.dfsIndex = 0;
+                                g.wasChasing = false;
+                            }
+                            
+                            if (!ghostInTerritory) {
+                                // Return to territory
+                                const centerX = Math.floor((g.territory.minX + g.territory.maxX) / 2);
+                                const centerY = Math.floor((g.territory.minY + g.territory.maxY) / 2);
+                                nextMove = getDirectionToward(gx, gy, centerX, centerY);
+                            } else {
+                                // Do DFS patrol
+                                nextMove = getTerritorialDFSMove(g);
+                            }
                         }
                     }
                     break;
+                    
                 case GHOST_STRATEGY.TRACKING:
                     nextMove = getTrackingDirection(g, index, pacX, pacY);
                     break;
+                    
                 default:
                     nextMove = getRandomDirection(g);
             }
