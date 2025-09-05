@@ -423,15 +423,39 @@ function findShortestPath(startX, startY, targetX, targetY) {
 
 // Assign territory quadrants to territorial ghosts
 function assignTerritory(ghostIndex) {
-    // Count how many territorial ghosts already exist
-    let territorialCount = 0;
-    for (let i = 0; i < ghostIndex; i++) {
-        if (DIFFICULTY_CONFIGS[currentDifficulty][i] === GHOST_STRATEGY.TERRITORIAL) {
-            territorialCount++;
+    // Get all available territories
+    const allTerritories = [0, 1, 2, 3]; // 4 quadrants
+    
+    // Find which territories are already taken by existing ghosts
+    const takenTerritories = new Set();
+    for (let i = 0; i < ghostIndex && i < ghosts.length; i++) {
+        if (ghosts[i].strategy === GHOST_STRATEGY.TERRITORIAL && ghosts[i].territory) {
+            // Determine which territory index this ghost has
+            const territory = ghosts[i].territory;
+            const midX = Math.floor(COLS / 2);
+            const midY = Math.floor(ROWS / 2);
+            
+            let territoryIndex = -1;
+            if (territory.maxX <= midX && territory.maxY <= midY) territoryIndex = 0; // Top-left
+            else if (territory.minX >= midX && territory.maxY <= midY) territoryIndex = 1; // Top-right
+            else if (territory.maxX <= midX && territory.minY >= midY) territoryIndex = 2; // Bottom-left
+            else if (territory.minX >= midX && territory.minY >= midY) territoryIndex = 3; // Bottom-right
+            
+            if (territoryIndex >= 0) {
+                takenTerritories.add(territoryIndex);
+            }
         }
     }
     
-    return assignTerritoryByIndex(territorialCount);
+    // Find first available territory
+    for (let i = 0; i < allTerritories.length; i++) {
+        if (!takenTerritories.has(i)) {
+            return assignTerritoryByIndex(i);
+        }
+    }
+    
+    // If all territories are taken (more than 4 territorial ghosts), cycle back
+    return assignTerritoryByIndex(ghostIndex % 4);
 }
 
 // Random AI: Choose random unvisited cell, backtrack if trapped
