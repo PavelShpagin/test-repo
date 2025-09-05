@@ -686,9 +686,9 @@ function getTrackingDirection(ghost, ghostIndex, pacX, pacY) {
     }
     
     // For other tracking ghosts: use probability-based movement
-    // Probability of taking shortest path: 100% - (10% * trackingIndex)
-    // So: 2nd ghost = 90%, 3rd = 80%, 4th = 70%
-    const shortestPathProbability = Math.max(0.5, 1.0 - (0.1 * trackingIndex));
+    // Probability of taking shortest path decreases slightly for each ghost
+    // 1st = 100%, 2nd = 95%, 3rd = 90%, 4th = 85%
+    const shortestPathProbability = Math.max(0.85, 1.0 - (0.05 * trackingIndex));
     
     // Find valid neighboring cells that weren't visited in the last move
     const validAlternatives = [];
