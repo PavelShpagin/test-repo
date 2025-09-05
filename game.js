@@ -297,7 +297,8 @@ function resetLevel() {
                     visitedCells: new Set(), // Track all visited cells for random strategy
                     lastPosition: null,
                     dfsPath: [],  // DFS path for territorial patrol
-                    dfsIndex: 0   // Current position in DFS path
+                    dfsIndex: 0,  // Current position in DFS path
+                    wasChasing: false  // Track if territorial ghost was chasing
                 };
                 
                 // Assign territory for territorial ghosts
@@ -525,8 +526,9 @@ function getTerritorialDFSMove(ghost) {
     if (!territory) return null;
     
     // Initialize or regenerate DFS path if needed
+    // IMPORTANT: Generate from ghost's CURRENT position, not center
     if (!ghost.dfsPath || ghost.dfsPath.length === 0) {
-        ghost.dfsPath = generateDFSPathForTerritory(territory);
+        ghost.dfsPath = generateDFSPathForTerritory(territory, gx, gy);
         ghost.dfsIndex = 0;
     }
     
@@ -549,13 +551,22 @@ function getTerritorialDFSMove(ghost) {
 }
 
 // Generate DFS path for patrolling a territory - only includes cells in territory subgraph
-function generateDFSPathForTerritory(territory) {
+function generateDFSPathForTerritory(territory, ghostX, ghostY) {
     const path = [];
     const visited = new Set();
     
-    // Start from center of territory
-    const startX = Math.floor((territory.minX + territory.maxX) / 2);
-    const startY = Math.floor((territory.minY + territory.maxY) / 2);
+    // Start from ghost's current position if in territory, otherwise from center
+    let startX, startY;
+    if (ghostX >= territory.minX && ghostX < territory.maxX &&
+        ghostY >= territory.minY && ghostY < territory.maxY) {
+        // Ghost is in territory - start from current position
+        startX = ghostX;
+        startY = ghostY;
+    } else {
+        // Ghost outside territory - shouldn't happen but use center as fallback
+        startX = Math.floor((territory.minX + territory.maxX) / 2);
+        startY = Math.floor((territory.minY + territory.maxY) / 2);
+    }
     
     // DFS to visit all accessible cells ONLY within territory bounds
     function dfs(x, y) {
@@ -840,50 +851,54 @@ function updateGhosts() {
                         const ghostInTerritory = gx >= g.territory.minX && gx < g.territory.maxX &&
                                                gy >= g.territory.minY && gy < g.territory.maxY;
                         
-                        if (pacmanInTerritory && dijkstraMove) {
-                            // Pacman is in territory - try to use Dijkstra
+                        // FIRST: If ghost is outside territory, always move to center
+                        if (!ghostInTerritory) {
+                            const centerX = Math.floor((g.territory.minX + g.territory.maxX) / 2);
+                            const centerY = Math.floor((g.territory.minY + g.territory.maxY) / 2);
+                            nextMove = getDirectionToward(gx, gy, centerX, centerY);
+                            // Clear DFS state for when we return
+                            g.dfsPath = null;
+                            g.dfsIndex = 0;
+                            g.wasChasing = false;
+                        }
+                        // SECOND: Ghost is IN territory - decide based on Pacman
+                        else if (pacmanInTerritory && dijkstraMove) {
+                            // Pacman is in our territory - try to chase
                             const nextX = gx + dijkstraMove.dx;
                             const nextY = gy + dijkstraMove.dy;
                             const moveStaysInTerritory = nextX >= g.territory.minX && nextX < g.territory.maxX &&
                                                         nextY >= g.territory.minY && nextY < g.territory.maxY;
                             
-                            if (ghostInTerritory && moveStaysInTerritory) {
-                                // Use Dijkstra move - it keeps us in territory
+                            if (moveStaysInTerritory) {
+                                // Dijkstra move keeps us in territory - chase!
                                 nextMove = dijkstraMove;
-                                // Clear DFS when switching to chase
+                                // Mark as chasing and clear DFS
                                 if (!g.wasChasing) {
                                     g.dfsPath = null;
                                     g.dfsIndex = 0;
                                     g.wasChasing = true;
                                 }
-                            } else if (!ghostInTerritory) {
-                                // Return to territory first
-                                const centerX = Math.floor((g.territory.minX + g.territory.maxX) / 2);
-                                const centerY = Math.floor((g.territory.minY + g.territory.maxY) / 2);
-                                nextMove = getDirectionToward(gx, gy, centerX, centerY);
                             } else {
-                                // Can't chase without leaving - continue DFS
-                                g.wasChasing = false;
+                                // Can't chase without leaving territory - patrol instead
+                                if (g.wasChasing) {
+                                    // Was chasing but now can't - reinit DFS
+                                    g.dfsPath = null;
+                                    g.dfsIndex = 0;
+                                    g.wasChasing = false;
+                                }
                                 nextMove = getTerritorialDFSMove(g);
                             }
-                        } else {
-                            // Pacman not in territory - do DFS patrol
+                        }
+                        // THIRD: Ghost in territory, Pacman NOT in territory - patrol
+                        else {
                             if (g.wasChasing) {
-                                // Just stopped chasing - reinitialize DFS
+                                // Pacman just left - reinitialize DFS from current position
                                 g.dfsPath = null;
                                 g.dfsIndex = 0;
                                 g.wasChasing = false;
                             }
-                            
-                            if (!ghostInTerritory) {
-                                // Return to territory
-                                const centerX = Math.floor((g.territory.minX + g.territory.maxX) / 2);
-                                const centerY = Math.floor((g.territory.minY + g.territory.maxY) / 2);
-                                nextMove = getDirectionToward(gx, gy, centerX, centerY);
-                            } else {
-                                // Do DFS patrol
-                                nextMove = getTerritorialDFSMove(g);
-                            }
+                            // Do DFS patrol
+                            nextMove = getTerritorialDFSMove(g);
                         }
                     }
                     break;
