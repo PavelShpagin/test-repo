@@ -517,6 +517,34 @@ function getRandomDirection(ghost) {
     return ghost.dir || null;
 }
 
+// Get alternative move for tracking ghosts (when not taking shortest path)
+function getAlternativeMove(ghost, gx, gy, avoidMove) {
+    const validMoves = [];
+    
+    for (let dir of Object.values(DIR)) {
+        const nx = gx + dir.dx;
+        const ny = gy + dir.dy;
+        
+        // Check if valid and not the move we're avoiding
+        if (nx >= 0 && nx < COLS && ny >= 0 && ny < ROWS && 
+            grid[ny][nx] !== 1 &&
+            !(dir.dx === avoidMove.dx && dir.dy === avoidMove.dy)) {
+            
+            // Check if not visited recently
+            const posKey = `${nx},${ny}`;
+            if (!ghost.lastPosition || 
+                (ghost.lastPosition.x !== nx || ghost.lastPosition.y !== ny)) {
+                validMoves.push(dir);
+            }
+        }
+    }
+    
+    // Return random valid alternative, or the avoided move if no alternatives
+    return validMoves.length > 0 ? 
+           validMoves[Math.floor(Math.random() * validMoves.length)] : 
+           avoidMove;
+}
+
 // Territorial DFS patrol move - only moves within territory subgraph
 function getTerritorialDFSMove(ghost) {
     const gx = Math.round(ghost.x);
@@ -904,7 +932,30 @@ function updateGhosts() {
                     break;
                     
                 case GHOST_STRATEGY.TRACKING:
-                    nextMove = getTrackingDirection(g, index, pacX, pacY);
+                    // Use the Dijkstra result we already calculated
+                    if (dijkstraMove) {
+                        // Count tracking ghosts before this one for probability
+                        let trackingIndex = 0;
+                        for (let i = 0; i < index; i++) {
+                            if (ghosts[i].strategy === GHOST_STRATEGY.TRACKING) {
+                                trackingIndex++;
+                            }
+                        }
+                        
+                        // Apply probability based on tracking index
+                        // 1st = 100%, 2nd = 95%, 3rd = 90%, 4th = 85%
+                        const shortestPathProbability = Math.max(0.85, 1.0 - (0.05 * trackingIndex));
+                        
+                        if (trackingIndex === 0 || Math.random() < shortestPathProbability) {
+                            // Take shortest path
+                            nextMove = dijkstraMove;
+                        } else {
+                            // Take alternative
+                            nextMove = getAlternativeMove(g, gx, gy, dijkstraMove);
+                        }
+                    } else {
+                        nextMove = getRandomDirection(g);
+                    }
                     break;
                     
                 default:
