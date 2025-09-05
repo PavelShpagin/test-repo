@@ -963,11 +963,26 @@ function updateGhosts() {
             }
             
             if (nextMove) {
+                // FINAL SAFETY CHECK: Territorial ghosts must NEVER leave territory
+                if (g.strategy === GHOST_STRATEGY.TERRITORIAL && g.territory) {
+                    const nextX = gx + nextMove.dx;
+                    const nextY = gy + nextMove.dy;
+                    const ghostInTerritory = gx >= g.territory.minX && gx < g.territory.maxX &&
+                                            gy >= g.territory.minY && gy < g.territory.maxY;
+                    const moveInTerritory = nextX >= g.territory.minX && nextX < g.territory.maxX &&
+                                           nextY >= g.territory.minY && nextY < g.territory.maxY;
+                    
+                    // If ghost is in territory and move would leave, BLOCK IT
+                    if (ghostInTerritory && !moveInTerritory) {
+                        nextMove = null; // Cancel the move entirely
+                    }
+                }
+                
                 // Check if it's not a reverse (unless no choice)
-                if (!g.dir || !(nextMove.dx === -g.dir.dx && nextMove.dy === -g.dir.dy)) {
+                if (nextMove && (!g.dir || !(nextMove.dx === -g.dir.dx && nextMove.dy === -g.dir.dy))) {
                     g.dir = nextMove;
                     g.timer = 0;
-                } else {
+                } else if (nextMove) {
                     // Try to find alternative that's not reverse
                         const validDirs = [];
                         for (let dir of Object.values(DIR)) {
@@ -1019,9 +1034,28 @@ function updateGhosts() {
         
         // Move ghost with consistent speed
         if (g.dir && canMove(g.x, g.y, g.dir)) {
-            const speed = 0.05;  // Same speed for all ghosts
-            g.x += g.dir.dx * speed;
-            g.y += g.dir.dy * speed;
+            // ABSOLUTE FINAL CHECK: Territorial ghosts cannot move outside territory
+            if (g.strategy === GHOST_STRATEGY.TERRITORIAL && g.territory) {
+                const currentInTerritory = g.x >= g.territory.minX && g.x < g.territory.maxX &&
+                                          g.y >= g.territory.minY && g.y < g.territory.maxY;
+                const nextX = g.x + g.dir.dx * 0.05;
+                const nextY = g.y + g.dir.dy * 0.05;
+                const nextInTerritory = nextX >= g.territory.minX && nextX < g.territory.maxX &&
+                                       nextY >= g.territory.minY && nextY < g.territory.maxY;
+                
+                // Only move if we stay in territory OR we're returning to territory
+                if (currentInTerritory && !nextInTerritory) {
+                    // Would leave territory - DON'T MOVE
+                    g.dir = null;
+                }
+            }
+            
+            // Only move if direction is still valid after all checks
+            if (g.dir) {
+                const speed = 0.05;  // Same speed for all ghosts
+                g.x += g.dir.dx * speed;
+                g.y += g.dir.dy * speed;
+            }
         }
         
         // Check collision
