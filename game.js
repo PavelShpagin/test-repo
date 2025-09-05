@@ -538,17 +538,19 @@ function getTerritorialDirection(ghost, pacX, pacY) {
         ghost.dfsPath = null;
         ghost.dfsIndex = 0;
         
-        // Chase Pacman using shortest path (Dijkstra)
-        const path = findShortestPath(gx, gy, pacX, pacY);
-        return (path && path.length > 0) ? path[0] : null;
+        // Chase Pacman but STAY WITHIN TERRITORY
+        // Use direct movement toward Pacman, constrained to territory
+        return getDirectionTowardInTerritory(gx, gy, pacX, pacY, territory);
     }
     
     // If not in territory, move back to it first
     if (!ghostInTerritory) {
         const centerX = Math.floor((territory.minX + territory.maxX) / 2);
         const centerY = Math.floor((territory.minY + territory.maxY) / 2);
-        const path = findShortestPath(gx, gy, centerX, centerY);
-        return (path && path.length > 0) ? path[0] : null;
+        
+        // Move toward territory center, but use simple direction
+        // This should only happen at spawn, so just move toward center
+        return getDirectionToward(gx, gy, centerX, centerY);
     }
     
     // DFS patrol within territory ONLY
@@ -838,6 +840,22 @@ function updateGhosts() {
                     break;
                 case GHOST_STRATEGY.TERRITORIAL:
                     nextMove = getTerritorialDirection(g, pacX, pacY);
+                    // Extra safety: ensure territorial ghost never leaves territory
+                    if (nextMove && g.territory) {
+                        const nextX = gx + nextMove.dx;
+                        const nextY = gy + nextMove.dy;
+                        const inTerritory = nextX >= g.territory.minX && nextX < g.territory.maxX &&
+                                           nextY >= g.territory.minY && nextY < g.territory.maxY;
+                        
+                        // Only allow moves within territory, unless ghost is returning to territory
+                        const ghostInTerritory = gx >= g.territory.minX && gx < g.territory.maxX &&
+                                                gy >= g.territory.minY && gy < g.territory.maxY;
+                        
+                        if (ghostInTerritory && !inTerritory) {
+                            // Ghost is in territory but move would leave it - block it!
+                            nextMove = null;
+                        }
+                    }
                     break;
                 case GHOST_STRATEGY.TRACKING:
                     nextMove = getTrackingDirection(g, index, pacX, pacY);
