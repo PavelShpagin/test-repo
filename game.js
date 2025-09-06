@@ -305,6 +305,7 @@ function resetLevel() {
                 // Assign territory for territorial ghosts
                 if (strategy === GHOST_STRATEGY.TERRITORIAL) {
                     ghost.territory = assignTerritory(ghostIndex);
+                    console.log(`Ghost ${ghostIndex} (${ghost.color}) assigned territory:`, ghost.territory);
                 }
                 
                 ghosts.push(ghost);
@@ -427,39 +428,20 @@ function findShortestPath(startX, startY, targetX, targetY) {
 
 // Assign territory quadrants to territorial ghosts
 function assignTerritory(ghostIndex) {
-    // Get all available territories
-    const allTerritories = [0, 1, 2, 3]; // 4 quadrants
+    // Count how many territorial ghosts came before this one based on difficulty config
+    let territorialCount = 0;
+    const strategies = DIFFICULTY_CONFIGS[currentDifficulty];
     
-    // Find which territories are already taken by existing ghosts
-    const takenTerritories = new Set();
-    for (let i = 0; i < ghostIndex && i < ghosts.length; i++) {
-        if (ghosts[i].strategy === GHOST_STRATEGY.TERRITORIAL && ghosts[i].territory) {
-            // Determine which territory index this ghost has
-            const territory = ghosts[i].territory;
-            const midX = Math.floor(COLS / 2);
-            const midY = Math.floor(ROWS / 2);
-            
-            let territoryIndex = -1;
-            if (territory.maxX <= midX && territory.maxY <= midY) territoryIndex = 0; // Top-left
-            else if (territory.minX >= midX && territory.maxY <= midY) territoryIndex = 1; // Top-right
-            else if (territory.maxX <= midX && territory.minY >= midY) territoryIndex = 2; // Bottom-left
-            else if (territory.minX >= midX && territory.minY >= midY) territoryIndex = 3; // Bottom-right
-            
-            if (territoryIndex >= 0) {
-                takenTerritories.add(territoryIndex);
-            }
+    for (let i = 0; i < ghostIndex && i < strategies.length; i++) {
+        if (strategies[i] === GHOST_STRATEGY.TERRITORIAL) {
+            territorialCount++;
         }
     }
     
-    // Find first available territory
-    for (let i = 0; i < allTerritories.length; i++) {
-        if (!takenTerritories.has(i)) {
-            return assignTerritoryByIndex(i);
-        }
-    }
-    
-    // If all territories are taken (more than 4 territorial ghosts), cycle back
-    return assignTerritoryByIndex(ghostIndex % 4);
+    // Assign territories in order: 0 (top-left), 1 (top-right), 2 (bottom-left), 3 (bottom-right)
+    const territoryIndex = territorialCount % 4;
+    console.log(`Assigning territory ${territoryIndex} to ghost ${ghostIndex} (${territorialCount}th territorial ghost)`);
+    return assignTerritoryByIndex(territoryIndex);
 }
 
 // Random AI: Choose random unvisited cell, backtrack if trapped
@@ -855,23 +837,60 @@ function updateGhosts() {
             g.visitedCells.clear();
         }
         
-        // Check if Pacman just entered territorial ghost's territory
-        let pacmanJustEntered = false;
+        // IMMEDIATE TERRITORIAL RESPONSE CHECK (runs every frame for ALL territorial ghosts)
         if (g.strategy === GHOST_STRATEGY.TERRITORIAL && g.territory) {
             const pacmanInTerritory = pacX >= g.territory.minX && pacX < g.territory.maxX &&
                                      pacY >= g.territory.minY && pacY < g.territory.maxY;
-            pacmanJustEntered = pacmanInTerritory && !g.pacmanWasInTerritory;
+            const gx = Math.round(g.x);
+            const gy = Math.round(g.y);
+            const ghostInTerritory = gx >= g.territory.minX && gx < g.territory.maxX &&
+                                    gy >= g.territory.minY && gy < g.territory.maxY;
+            
+            // Track if Pacman just entered
+            const pacmanJustEntered = pacmanInTerritory && !g.pacmanWasInTerritory;
             g.pacmanWasInTerritory = pacmanInTerritory;
+            
+            // If Pacman enters territory and ghost is patrolling, immediately switch to chase
+            if (pacmanInTerritory && ghostInTerritory && !g.wasChasing) {
+                const dijkstraMove = ghostPaths[index];
+                if (dijkstraMove) {
+                    const nextX = gx + dijkstraMove.dx;
+                    const nextY = gy + dijkstraMove.dy;
+                    
+                    // Only switch if the move keeps us in territory
+                    if (nextX >= g.territory.minX && nextX < g.territory.maxX &&
+                        nextY >= g.territory.minY && nextY < g.territory.maxY) {
+                        // Drop DFS immediately and switch to chasing
+                        g.dir = dijkstraMove;
+                        g.wasChasing = true;
+                        g.dfsPath = null;
+                        g.dfsIndex = 0;
+                        g.timer = 0; // Reset timer for immediate updates
+                        
+                        // Snap to grid for smoother transition
+                        if (Math.abs(g.x - gx) < 0.3 && Math.abs(g.y - gy) < 0.3) {
+                            g.x = gx;
+                            g.y = gy;
+                        }
+                    }
+                }
+            }
+            // If Pacman leaves territory and ghost was chasing, immediately switch to patrol
+            else if (!pacmanInTerritory && ghostInTerritory && g.wasChasing) {
+                g.wasChasing = false;
+                g.dfsPath = null;  // Will regenerate DFS path from current position
+                g.dfsIndex = 0;
+                g.timer = 0;
+            }
         }
         
-        // Only update direction at grid centers (or immediately when Pacman enters territory)
+        // Only update direction at grid centers
         const nearCenter = Math.abs(g.x - Math.round(g.x)) < 0.1 && 
                           Math.abs(g.y - Math.round(g.y)) < 0.1;
         
-        // Territorial ghosts can update immediately when Pacman is in their territory
+        // Allow more frequent updates for territorial ghosts when chasing
         const canUpdate = (nearCenter && g.timer > 10) || 
-                         (pacmanJustEntered && nearCenter) ||
-                         (g.strategy === GHOST_STRATEGY.TERRITORIAL && g.pacmanWasInTerritory && nearCenter && g.timer > 2);
+                         (g.strategy === GHOST_STRATEGY.TERRITORIAL && g.wasChasing && nearCenter && g.timer > 2);
         
         if (canUpdate) {
             const gx = Math.round(g.x);
@@ -1087,53 +1106,6 @@ function updateGhosts() {
                     // Must reverse
                     g.dir = { dx: -g.dir.dx, dy: -g.dir.dy };
                 }
-                g.timer = 0;
-            }
-        }
-        
-        // IMMEDIATE RESPONSE: Territorial ghosts drop DFS and chase when Pacman enters
-        // This happens even mid-movement, not just at grid centers
-        if (g.strategy === GHOST_STRATEGY.TERRITORIAL && g.territory) {
-            const pacmanInTerritory = pacX >= g.territory.minX && pacX < g.territory.maxX &&
-                                     pacY >= g.territory.minY && pacY < g.territory.maxY;
-            const gx = Math.round(g.x);
-            const gy = Math.round(g.y);
-            const ghostInTerritory = gx >= g.territory.minX && gx < g.territory.maxX &&
-                                    gy >= g.territory.minY && gy < g.territory.maxY;
-            
-            // If Pacman is in territory, ghost is in territory, and ghost is not already chasing
-            // Then immediately switch to chasing, even mid-movement
-            if (pacmanInTerritory && ghostInTerritory && !g.wasChasing) {
-                // Use the pre-calculated Dijkstra move
-                const dijkstraMove = ghostPaths[index];
-                
-                if (dijkstraMove) {
-                    const nextX = gx + dijkstraMove.dx;
-                    const nextY = gy + dijkstraMove.dy;
-                    
-                    // Only switch if the move keeps us in territory
-                    if (nextX >= g.territory.minX && nextX < g.territory.maxX &&
-                        nextY >= g.territory.minY && nextY < g.territory.maxY) {
-                        // Drop DFS immediately and switch to chasing
-                        g.dir = dijkstraMove;
-                        g.wasChasing = true;
-                        g.dfsPath = null;
-                        g.dfsIndex = 0;
-                        g.timer = 0; // Reset timer to allow continuous updates while chasing
-                        
-                        // Snap to grid for smoother transition
-                        if (Math.abs(g.x - gx) < 0.3 && Math.abs(g.y - gy) < 0.3) {
-                            g.x = gx;
-                            g.y = gy;
-                        }
-                    }
-                }
-            }
-            // Also handle when Pacman leaves - immediately resume patrol
-            else if (!pacmanInTerritory && ghostInTerritory && g.wasChasing) {
-                g.wasChasing = false;
-                g.dfsPath = null;  // Will regenerate DFS path from current position
-                g.dfsIndex = 0;
                 g.timer = 0;
             }
         }
