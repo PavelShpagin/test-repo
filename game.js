@@ -315,6 +315,40 @@ function resetLevel() {
     }
 }
 
+function resetPositions() {
+    // Reset positions only - keep pellets intact
+    let ghostIndex = 0;
+    
+    for (let y = 0; y < ROWS; y++) {
+        for (let x = 0; x < COLS; x++) {
+            const cell = MAZE[y][x];
+            
+            if (cell === 2) {
+                // Reset Pacman position
+                pacman.x = x;
+                pacman.y = y;
+                pacman.dir = null;
+                pacman.nextDir = null;
+            } else if (cell === 3 && ghostIndex < ghosts.length) {
+                // Reset ghost position
+                const ghost = ghosts[ghostIndex];
+                ghost.x = x;
+                ghost.y = y;
+                ghost.dir = null;
+                ghost.timer = 0;
+                ghost.hasLeftBase = false;
+                ghost.visitedCells.clear();
+                ghost.lastPosition = null;
+                ghost.dfsPath = [];
+                ghost.dfsIndex = 0;
+                ghost.wasChasing = false;
+                ghost.pacmanWasInTerritory = false;
+                ghostIndex++;
+            }
+        }
+    }
+}
+
 function setupControls() {
     // Touch/click controls
     document.querySelectorAll('.controls button').forEach(btn => {
@@ -850,8 +884,11 @@ function updateGhosts() {
             const pacmanJustEntered = pacmanInTerritory && !g.pacmanWasInTerritory;
             g.pacmanWasInTerritory = pacmanInTerritory;
             
+            // Only update if near grid center to avoid conflicting updates
+            const nearCenter = Math.abs(g.x - gx) < 0.2 && Math.abs(g.y - gy) < 0.2;
+            
             // If Pacman enters territory and ghost is patrolling, immediately switch to chase
-            if (pacmanInTerritory && ghostInTerritory && !g.wasChasing) {
+            if (pacmanInTerritory && ghostInTerritory && !g.wasChasing && nearCenter) {
                 const dijkstraMove = ghostPaths[index];
                 if (dijkstraMove) {
                     const nextX = gx + dijkstraMove.dx;
@@ -868,19 +905,22 @@ function updateGhosts() {
                         g.timer = 0; // Reset timer for immediate updates
                         
                         // Snap to grid for smoother transition
-                        if (Math.abs(g.x - gx) < 0.3 && Math.abs(g.y - gy) < 0.3) {
-                            g.x = gx;
-                            g.y = gy;
-                        }
+                        g.x = gx;
+                        g.y = gy;
                     }
                 }
             }
             // If Pacman leaves territory and ghost was chasing, immediately switch to patrol
-            else if (!pacmanInTerritory && ghostInTerritory && g.wasChasing) {
+            else if (!pacmanInTerritory && ghostInTerritory && g.wasChasing && nearCenter) {
                 g.wasChasing = false;
                 g.dfsPath = null;  // Will regenerate DFS path from current position
                 g.dfsIndex = 0;
                 g.timer = 0;
+                // Ensure ghost has a valid direction
+                if (!g.dir) {
+                    const dfsMove = getTerritorialDFSMove(g);
+                    if (dfsMove) g.dir = dfsMove;
+                }
             }
         }
         
@@ -1105,6 +1145,35 @@ function updateGhosts() {
                 } else if (g.dir) {
                     // Must reverse
                     g.dir = { dx: -g.dir.dx, dy: -g.dir.dy };
+                } else {
+                    // Ghost has no direction at all - give it one
+                    // For territorial ghosts, try to get a valid move
+                    if (g.strategy === GHOST_STRATEGY.TERRITORIAL && g.territory) {
+                        const territorialDirs = [];
+                        for (let dir of Object.values(DIR)) {
+                            const nx = gx + dir.dx;
+                            const ny = gy + dir.dy;
+                            const ghostInTerritory = gx >= g.territory.minX && gx < g.territory.maxX &&
+                                                    gy >= g.territory.minY && gy < g.territory.maxY;
+                            
+                            // If in territory, only consider moves that stay in territory
+                            if (ghostInTerritory) {
+                                if (nx >= g.territory.minX && nx < g.territory.maxX &&
+                                    ny >= g.territory.minY && ny < g.territory.maxY &&
+                                    nx >= 0 && nx < COLS && ny >= 0 && ny < ROWS && grid[ny][nx] !== 1) {
+                                    territorialDirs.push(dir);
+                                }
+                            } else {
+                                // If outside territory, any valid move toward center
+                                if (nx >= 0 && nx < COLS && ny >= 0 && ny < ROWS && grid[ny][nx] !== 1) {
+                                    territorialDirs.push(dir);
+                                }
+                            }
+                        }
+                        if (territorialDirs.length > 0) {
+                            g.dir = territorialDirs[0];
+                        }
+                    }
                 }
                 g.timer = 0;
             }
@@ -1157,7 +1226,8 @@ function loseLife() {
         document.getElementById('final-score').textContent = score;
         document.getElementById('game-over').classList.remove('hidden');
     } else {
-        resetLevel();
+        // Just reset positions, don't reset pellets
+        resetPositions();
     }
 }
 
