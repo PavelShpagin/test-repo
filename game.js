@@ -1047,6 +1047,53 @@ function updateGhosts() {
                 }
         }
         
+        // IMMEDIATE RESPONSE: Territorial ghosts drop DFS and chase when Pacman enters
+        // This happens even mid-movement, not just at grid centers
+        if (g.strategy === GHOST_STRATEGY.TERRITORIAL && g.territory) {
+            const pacmanInTerritory = pacX >= g.territory.minX && pacX < g.territory.maxX &&
+                                     pacY >= g.territory.minY && pacY < g.territory.maxY;
+            const gx = Math.round(g.x);
+            const gy = Math.round(g.y);
+            const ghostInTerritory = gx >= g.territory.minX && gx < g.territory.maxX &&
+                                    gy >= g.territory.minY && gy < g.territory.maxY;
+            
+            // If Pacman is in territory, ghost is in territory, and ghost is not already chasing
+            // Then immediately switch to chasing, even mid-movement
+            if (pacmanInTerritory && ghostInTerritory && !g.wasChasing) {
+                // Use the pre-calculated Dijkstra move
+                const dijkstraMove = ghostPaths[index];
+                
+                if (dijkstraMove) {
+                    const nextX = gx + dijkstraMove.dx;
+                    const nextY = gy + dijkstraMove.dy;
+                    
+                    // Only switch if the move keeps us in territory
+                    if (nextX >= g.territory.minX && nextX < g.territory.maxX &&
+                        nextY >= g.territory.minY && nextY < g.territory.maxY) {
+                        // Drop DFS immediately and switch to chasing
+                        g.dir = dijkstraMove;
+                        g.wasChasing = true;
+                        g.dfsPath = null;
+                        g.dfsIndex = 0;
+                        g.timer = 0; // Reset timer to allow continuous updates while chasing
+                        
+                        // Snap to grid for smoother transition
+                        if (Math.abs(g.x - gx) < 0.3 && Math.abs(g.y - gy) < 0.3) {
+                            g.x = gx;
+                            g.y = gy;
+                        }
+                    }
+                }
+            }
+            // Also handle when Pacman leaves - immediately resume patrol
+            else if (!pacmanInTerritory && ghostInTerritory && g.wasChasing) {
+                g.wasChasing = false;
+                g.dfsPath = null;  // Will regenerate DFS path from current position
+                g.dfsIndex = 0;
+                g.timer = 0;
+            }
+        }
+        
         // Move ghost with consistent speed
         if (g.dir && canMove(g.x, g.y, g.dir)) {
             // ABSOLUTE FINAL CHECK: Territorial ghosts cannot move outside territory
