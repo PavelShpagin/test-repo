@@ -687,12 +687,19 @@ function getDirectionTowardInTerritory(fromX, fromY, toX, toY, territory) {
     }
     
     // Try any valid direction within territory
+    const validDirs = [];
     for (let dir of Object.values(DIR)) {
         const nx = fromX + dir.dx;
         const ny = fromY + dir.dy;
-        if (grid[ny] && grid[ny][nx] !== 1 && inTerritory(nx, ny)) {
-            return dir;
+        if (nx >= 0 && nx < COLS && ny >= 0 && ny < ROWS && 
+            grid[ny][nx] !== 1 && inTerritory(nx, ny)) {
+            validDirs.push(dir);
         }
+    }
+    
+    // Return a random valid direction to avoid getting stuck
+    if (validDirs.length > 0) {
+        return validDirs[Math.floor(Math.random() * validDirs.length)];
     }
     
     return null;
@@ -987,9 +994,28 @@ function updateGhosts() {
                     const moveInTerritory = nextX >= g.territory.minX && nextX < g.territory.maxX &&
                                            nextY >= g.territory.minY && nextY < g.territory.maxY;
                     
-                    // If ghost is in territory and move would leave, BLOCK IT
+                    // If ghost is in territory and move would leave, find alternative
                     if (ghostInTerritory && !moveInTerritory) {
-                        nextMove = null; // Cancel the move entirely
+                        // Try to find any valid move within territory
+                        const territorialDirs = [];
+                        for (let dir of Object.values(DIR)) {
+                            const nx = gx + dir.dx;
+                            const ny = gy + dir.dy;
+                            if (nx >= g.territory.minX && nx < g.territory.maxX &&
+                                ny >= g.territory.minY && ny < g.territory.maxY &&
+                                grid[ny][nx] !== 1) {
+                                territorialDirs.push(dir);
+                            }
+                        }
+                        
+                        if (territorialDirs.length > 0) {
+                            // Prefer not reversing
+                            const nonReverse = territorialDirs.filter(d => 
+                                !g.dir || (d.dx !== -g.dir.dx || d.dy !== -g.dir.dy));
+                            nextMove = nonReverse.length > 0 ? nonReverse[0] : territorialDirs[0];
+                        } else {
+                            nextMove = null; // Truly stuck
+                        }
                     }
                 }
                 
@@ -999,36 +1025,19 @@ function updateGhosts() {
                     g.timer = 0;
                 } else if (nextMove) {
                     // Try to find alternative that's not reverse
-                        const validDirs = [];
-                        for (let dir of Object.values(DIR)) {
-                            const nx = gx + dir.dx;
-                            const ny = gy + dir.dy;
-                            
-                            if (dir.dx === -g.dir.dx && dir.dy === -g.dir.dy) continue;
-                            
-                            if (nx >= 0 && nx < COLS && ny >= 0 && ny < ROWS && grid[ny][nx] !== 1) {
-                                validDirs.push(dir);
-                            }
-                        }
-                        
-                        if (validDirs.length > 0) {
-                            g.dir = validDirs[0];
-                        } else {
-                            // Must reverse
-                            g.dir = nextMove;
-                        }
-                        g.timer = 0;
-                    }
-                } else {
-                    // No path found (shouldn't happen) - find any valid move
                     const validDirs = [];
                     for (let dir of Object.values(DIR)) {
                         const nx = gx + dir.dx;
                         const ny = gy + dir.dy;
                         
-                        // Don't reverse unless necessary
-                        if (g.dir && dir.dx === -g.dir.dx && dir.dy === -g.dir.dy) {
-                            continue;
+                        if (dir.dx === -g.dir.dx && dir.dy === -g.dir.dy) continue;
+                        
+                        // For territorial ghosts, also check territory bounds
+                        if (g.strategy === GHOST_STRATEGY.TERRITORIAL && g.territory) {
+                            if (nx < g.territory.minX || nx >= g.territory.maxX ||
+                                ny < g.territory.minY || ny >= g.territory.maxY) {
+                                continue;
+                            }
                         }
                         
                         if (nx >= 0 && nx < COLS && ny >= 0 && ny < ROWS && grid[ny][nx] !== 1) {
@@ -1037,14 +1046,49 @@ function updateGhosts() {
                     }
                     
                     if (validDirs.length > 0) {
-                        // Take first valid direction (deterministic)
                         g.dir = validDirs[0];
-                    } else if (g.dir) {
+                    } else {
                         // Must reverse
-                        g.dir = { dx: -g.dir.dx, dy: -g.dir.dy };
+                        g.dir = nextMove;
                     }
                     g.timer = 0;
                 }
+            } else {
+                // No path found - find any valid move
+                const validDirs = [];
+                for (let dir of Object.values(DIR)) {
+                    const nx = gx + dir.dx;
+                    const ny = gy + dir.dy;
+                    
+                    // Don't reverse unless necessary
+                    if (g.dir && dir.dx === -g.dir.dx && dir.dy === -g.dir.dy) {
+                        continue;
+                    }
+                    
+                    // For territorial ghosts, also check territory bounds
+                    if (g.strategy === GHOST_STRATEGY.TERRITORIAL && g.territory) {
+                        const ghostInTerritory = gx >= g.territory.minX && gx < g.territory.maxX &&
+                                                gy >= g.territory.minY && gy < g.territory.maxY;
+                        if (ghostInTerritory && (nx < g.territory.minX || nx >= g.territory.maxX ||
+                                                 ny < g.territory.minY || ny >= g.territory.maxY)) {
+                            continue;
+                        }
+                    }
+                    
+                    if (nx >= 0 && nx < COLS && ny >= 0 && ny < ROWS && grid[ny][nx] !== 1) {
+                        validDirs.push(dir);
+                    }
+                }
+                
+                if (validDirs.length > 0) {
+                    // Take first valid direction (deterministic)
+                    g.dir = validDirs[0];
+                } else if (g.dir) {
+                    // Must reverse
+                    g.dir = { dx: -g.dir.dx, dy: -g.dir.dy };
+                }
+                g.timer = 0;
+            }
         }
         
         // IMMEDIATE RESPONSE: Territorial ghosts drop DFS and chase when Pacman enters
